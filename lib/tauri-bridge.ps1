@@ -126,11 +126,12 @@ if ($Action -eq "download") {
     $cb = {
         param($p)
         Emit-Json @{
-            event   = "progress"
-            current = [long]$p.Current
-            total   = [long]$p.Total
-            speed   = [long]$p.Speed
-            file    = [string]$p.FileName
+            event    = "progress"
+            current  = [long]$p.Current
+            total    = [long]$p.Total
+            speed    = [long]$p.Speed
+            file     = [string]$p.FileName
+            filePath = $FilePath
         }
     }
 

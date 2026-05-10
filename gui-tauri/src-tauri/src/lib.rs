@@ -2,6 +2,7 @@ use serde_json::Value;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use tauri::{AppHandle, Emitter};
 
 fn find_project_root() -> anyhow::Result<PathBuf> {
@@ -152,6 +153,10 @@ fn get_default_output_dir() -> Result<String, String> {
 
 #[tauri::command]
 fn open_folder(path: String) -> Result<(), String> {
+    let meta = std::fs::metadata(&path).map_err(|e| format!("无法访问路径: {}", e))?;
+    if !meta.is_dir() {
+        return Err("路径不是目录".to_string());
+    }
     Command::new("explorer")
         .arg(&path)
         .spawn()
@@ -179,37 +184,44 @@ fn save_config(cfg: Value) -> Result<(), String> {
     Ok(())
 }
 
+static AUTO_LANG: OnceLock<String> = OnceLock::new();
+
+fn detect_auto_language() -> String {
+    // 1. Linux / macOS: LANG / LANGUAGE env vars
+    if let Ok(l) = std::env::var("LANG") {
+        if l.to_lowercase().starts_with("zh") {
+            return "zh-CN".to_string();
+        }
+    }
+    if let Ok(l) = std::env::var("LANGUAGE") {
+        if l.to_lowercase().starts_with("zh") {
+            return "zh-CN".to_string();
+        }
+    }
+    // 2. Windows: PowerShell Get-UICulture is reliable where env vars are empty
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(output) = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", "(Get-UICulture).Name"])
+            .output()
+        {
+            let locale = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .to_lowercase();
+            if locale.starts_with("zh") {
+                return "zh-CN".to_string();
+            }
+        }
+    }
+    "en-US".to_string()
+}
+
 fn resolve_language(lang: &str) -> String {
     if lang == "auto" || lang.is_empty() {
-        // 1. Linux / macOS: LANG / LANGUAGE env vars
-        if let Ok(l) = std::env::var("LANG") {
-            if l.to_lowercase().starts_with("zh") {
-                return "zh-CN".to_string();
-            }
-        }
-        if let Ok(l) = std::env::var("LANGUAGE") {
-            if l.to_lowercase().starts_with("zh") {
-                return "zh-CN".to_string();
-            }
-        }
-        // 2. Windows: PowerShell Get-UICulture is reliable where env vars are empty
-        #[cfg(target_os = "windows")]
-        {
-            if let Ok(output) = std::process::Command::new("powershell")
-                .args(["-NoProfile", "-Command", "(Get-UICulture).Name"])
-                .output()
-            {
-                let locale = String::from_utf8_lossy(&output.stdout)
-                    .trim()
-                    .to_lowercase();
-                if locale.starts_with("zh") {
-                    return "zh-CN".to_string();
-                }
-            }
-        }
-        return "en-US".to_string();
+        AUTO_LANG.get_or_init(detect_auto_language).clone()
+    } else {
+        lang.to_string()
     }
-    lang.to_string()
 }
 
 #[tauri::command]

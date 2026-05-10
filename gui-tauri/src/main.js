@@ -320,12 +320,7 @@ async function onDownload() {
 function onDownloadEvent(payload) {
   if (!payload || !payload.event) return;
   if (payload.event === "progress") {
-    const file = payload.file || "";
-    let row;
-    state.progressByPath.forEach((li) => {
-      const nameEl = li.querySelector(".progress-name");
-      if (nameEl && nameEl.textContent.endsWith(file)) row = li;
-    });
+    const row = state.progressByPath.get(payload.filePath);
     if (!row) return;
     const total = Number(payload.total) || 0;
     const cur   = Number(payload.current) || 0;
@@ -388,8 +383,9 @@ function looksLikeLink(text) {
 }
 async function tryAutoPaste() {
   if (!readText) return;
+  if (document.visibilityState !== "visible") return;
   const now = Date.now();
-  if (now - lastPasteAttempt < 2000) return;
+  if (now - lastPasteAttempt < 3000) return;
   lastPasteAttempt = now;
   const input = $("link-input");
   if (input.value.trim()) return;
@@ -438,6 +434,7 @@ async function applySettings() {
       await switchLanguage(chosenLang);
     }
     $("settings-msg").textContent = t("save_settings");
+    $("settings-msg").style.color = ""; // reset from previous error red
   } catch (e) {
     $("settings-msg").textContent = "Error: " + (e?.message || e);
     $("settings-msg").style.color = "var(--danger)";

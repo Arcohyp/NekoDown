@@ -39,7 +39,9 @@ function Load-Config {
                 $script:Config[$p.Name] = $p.Value
             }
             $needsSave = $false
-            if ($script:Config.defaultOutputDir -and $script:Config.defaultOutputDir -notlike "$($script:BaseDir)*") {
+            # Only reset the output dir if the previously configured path no longer exists.
+            # This preserves user-chosen external directories (e.g. D:\Downloads).
+            if ($script:Config.defaultOutputDir -and -not (Test-Path $script:Config.defaultOutputDir)) {
                 Write-Info (L "detected_folder_move")
                 $script:Config.defaultOutputDir = Join-Path $script:BaseDir "downloads"
                 $needsSave = $true
@@ -363,6 +365,9 @@ function Sanitize-FileName {
     param([string]$name)
     $invalid = [System.IO.Path]::GetInvalidFileNameChars()
     foreach ($c in $invalid) { $name = $name.Replace([string]$c, "_") }
+    # Prevent path traversal via relative path separators or dot sequences
+    $name = $name -replace '[\\/]', '_'
+    $name = $name -replace '\.{2,}', '_'
     $name = $name.TrimEnd(" .")
     $reserved = @("CON","PRN","AUX","NUL") + (1..9 | ForEach-Object { "COM$_"; "LPT$_" })
     $baseName = [System.IO.Path]::GetFileNameWithoutExtension($name)
@@ -440,7 +445,17 @@ function Start-FileDownload {
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $script:Aria2Path
-    $psi.Arguments = $ariaArgs -join " "
+    # Safe argument join: quote arguments that contain spaces or quotes to
+    # prevent injection into aria2c's command-line parser.
+    $safeArgs = $ariaArgs | ForEach-Object {
+        $arg = $_
+        if ($arg -match '[\s"]') {
+            '"' + ($arg -replace '"', '\"') + '"'
+        } else {
+            $arg
+        }
+    }
+    $psi.Arguments = $safeArgs -join " "
     $psi.WorkingDirectory = $script:BaseDir
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
