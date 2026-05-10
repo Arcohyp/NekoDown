@@ -1,0 +1,48 @@
+name: Release NekoDown GUI
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gui-tauri/src-tauri
+
+      - name: Build Tauri release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ./gui-tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: 'NekoDown ${{ github.ref_name }}'
+          releaseBody: |
+            ## NekoDown ${{ github.ref_name }}
+
+            Cloudreve share downloader optimised for the NekoGAL community.
+
+            ### Downloads
+
+            - `NekoDown_*_x64-setup.exe` &mdash; NSIS installer (recommended)
+            - `nekodown-gui.exe` &mdash; portable executable
+
+            See README for usage.
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: false

@@ -1,114 +1,76 @@
-# NekoDown v3.2
+# NekoDown
 
-**专为 NekoGAL 优化的 Cloudreve 分享链接一键下载工具**
+**专为 NekoGAL 优化的 Cloudreve 分享链接下载工具**
 
-自动解析 Cloudreve v4 网盘分享链接，使用 aria2 多线程加速下载。支持单文件、文件夹及递归子目录下载。
+提供原生 GUI 和命令行两种使用方式，自动调用 aria2 多线程下载，支持中日文文件名、断点续传、磁盘空间检查、自动重试。
 
-> 💡 **本工具针对 [NekoGAL](https://www.nekogal.com/) 深度优化**，完美支持其 Cloudflare R2 存储后端、大文件下载及中文/日文文件名处理。
-
----
-
-## ✨ 功能特点
-
-- 🚀 **多线程加速** - aria2 多线程下载，充分利用带宽
-- 📦 **自动安装 aria2** - 首次运行自动下载，无需手动安装
-- 🌍 **多语言支持** - 默认中文，config.json 可切换 `zh-CN`/`en-US`
-- 📋 **智能解析** - 粘贴链接即可，自动递归展开子目录
-- 🔄 **断点续传** - 中断后自动恢复，大文件无需从头下载
-- 🛡️ **安全处理** - 自动替换 Windows 非法字符，UTF-8 编码
-- 💾 **磁盘检查** - 自动检测剩余空间，避免下载失败
-- 📝 **日志记录** - 自动记录下载日志，方便排查问题
-- 📁 **绿色便携** - 无需安装，放在任意位置即可使用
+> 🐾 **本工具针对 [NekoGAL](https://www.nekogal.com/) 深度优化**，完美支持其 Cloudflare R2 存储后端、大文件下载及中文/日文文件名处理。
 
 ---
 
-## 📦 快速开始
+## ✨ 特性
 
-### 1. 获取工具
-
-将 `NekoDown` 文件夹解压/复制到任意位置（桌面、U 盘均可）。
-
-> **注意：** 可以放在**任何位置**，脚本会自动检测所在目录。
-
-### 2. 运行
-
-**方式一：双击运行（推荐）**
-
-双击 `双击运行.cmd` 即可启动。
-
-**方式二：命令行**
-
-```powershell
-cd C:\NekoDown
-.\neko-down.ps1
-```
-
-> **aria2 会自动下载** - 首次运行时脚本会自动从 GitHub 下载 aria2 到 `tools/aria2/` 目录。如果自动下载失败，可手动安装：`winget install aria2.aria2`
+- 🪟 **原生 GUI**（Tauri + WebView2）：暗色主题、4 套配色（粉桃/月夜/樱花/森林）、单文件 .exe 仅约 5 MB
+- ⌨️ **命令行版本**（PowerShell）：纯 ps1 脚本，绿色便携，零依赖
+- 🚀 **多线程加速**：aria2 多连接下载，可配置 1-64 线程
+- 📦 **自动安装 aria2**：首次运行自动下载到 `tools/aria2/`，无需手动配置
+- 🌍 **中英双语**：默认按系统语言切换，可手动指定 `zh-CN` / `en-US`
+- 🔄 **断点续传**：检测 `.aria2` 控制文件，中断后自动恢复
+- 🛡️ **安全文件名**：自动替换 Windows 非法字符与保留名（CON/PRN…）
+- 💾 **磁盘空间检查**：下载前自动验证可用空间
 
 ---
 
-## 📖 使用教程
+## 📥 下载
 
-### 支持的分享链接格式
+到 [GitHub Releases](https://github.com/Arcohyp/NekoDown/releases) 下载最新版：
 
-**NekoGAL 专用：**
+| 文件 | 用途 |
+|---|---|
+| `NekoDown_x.y.z_x64-setup.exe` | **NSIS 安装器**（推荐），自动创建开始菜单快捷方式与卸载入口 |
+| `nekodown-gui.exe` | **GUI 便携版**，单文件，解压到任意位置双击运行 |
+| 源码 zip | 含 CLI（`neko-down.ps1`）和 lib，命令行用户可直接使用 |
+
+---
+
+## 🚀 快速开始
+
+### GUI 用户
+
+1. 双击 `NekoDown_x.y.z_x64-setup.exe` 安装，或解压便携版到任意目录
+2. 启动 NekoDown，把 Cloudreve 分享链接粘贴到顶部输入框
+3. 点 **Parse**，文件列表加载完后点 **开始下载**
+4. 右上角 🎨 按钮切换主题
+
+支持的链接格式：
+
 ```
 https://pan.nekogal.top/s/xxxxx
 https://pan.nekogal.top/home?path=cloudreve%3A%2F%2Fxxxxx%40share
 https://share.nekogal.top/home?path=cloudreve%3A%2F%2Fxxxxx%40share
+https://pan.xxx.com/s/xxxxx        (任何 Cloudreve v4 实例)
 ```
 
-**通用 Cloudreve v4：**
-```
-https://pan.xxx.com/s/xxxxx
-```
+### 命令行用户
 
-### NekoGAL 专属支持
+```powershell
+# 交互模式
+.\neko-down.ps1
 
-- ✅ **Cloudflare R2 兼容** - 浏览器级请求头，避免 403 拦截
-- ✅ **大文件优化** - 数 GB 资源断点续传，自动重试
-- ✅ **中日文文件名** - UTF-8 编码，自动处理非法字符
-- ✅ **递归目录下载** - 自动展开子文件夹，保留目录结构
-- ✅ **智能恢复** - 检测 `.aria2` 控制文件，中断后自动续传
+# 直接传链接
+.\neko-down.ps1 -ShareLink "https://pan.nekogal.top/s/yE4u7"
 
-### 使用示例
-
-**单文件分享** - 粘贴链接后自动识别，检查磁盘空间后直接下载：
-
-```
-========================================
-  NekoDown v3.2.0
-========================================
-
-[OK]   aria2 已就绪
-粘贴 Cloudreve 分享链接:
-  示例：https://pan.xxx.com/s/xxxxx
-Link: https://pan.nekogal.top/s/yE4u7
-
-[INFO] 分享 ID: yE4u7
-[INFO] 获取分享信息...
-名称:      Mama×Holic.rar
-所有者:     skdy
-
-[INFO] 获取文件列表...
-[OK]   单文件分享，自动选中
-
-[INFO] 磁盘空间检查: 219.97 GB free, 1.85 GB required
-----------------------------------------
-[INFO] 文件: Mama×Holic.rar
-[INFO] 大小: 1.85 GB
-
-[INFO] 开始下载...
-[============================------------] 62% | 1.15 GB / 1.85 GB | 8.3 MB/s
+# 指定目录和线程数
+.\neko-down.ps1 -ShareLink "..." -OutputDir "D:\Downloads" -Aria2Connections 32
 ```
 
-**文件夹分享** - 列出所有文件，输入 `all` 或编号如 `1,3,5` 选择性下载。
+或双击根目录的 `双击运行.cmd`。
 
 ---
 
-## ⚙️ 配置文件
+## ⚙️ 配置
 
-编辑 `config.json`：
+编辑 `config.json`（GUI 与 CLI 共用）：
 
 ```json
 {
@@ -124,125 +86,119 @@ Link: https://pan.nekogal.top/s/yE4u7
 }
 ```
 
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| `defaultOutputDir` | 默认下载目录 | `downloads` |
-| `defaultConnections` | aria2 线程数 | `16` |
-| `autoRetry` | 失败自动重试 | `true` |
-| `maxRetries` | 最大重试次数 | `3` |
+| 字段 | 说明 | 默认 |
+|---|---|---|
+| `defaultOutputDir` | 默认下载目录 | `<安装目录>/downloads` |
+| `defaultConnections` | aria2 连接数 (1-64) | `16` |
+| `maxRetries` | 失败重试次数 | `3` |
 | `proxy` | HTTP 代理 | `""` |
-| `language` | 语言：`auto`/`zh-CN`/`en-US` | `"auto"` |
+| `language` | `auto` / `zh-CN` / `en-US` | `auto` |
 
-**切换语言：**
-```json
-{ "language": "en-US" }
-```
-
-**使用代理：**
-```json
-{ "proxy": "http://127.0.0.1:7890" }
-```
+GUI 内的设置面板（开发中）会以图形化形式同步这份配置。
 
 ---
 
-## 📂 目录说明
+## 🏗️ 架构
 
 ```
 NekoDown/
-├── 双击运行.cmd      # 启动器
-├── neko-down.ps1     # 主程序
-├── config.json       # 配置文件
-├── downloads/        # 下载目录
-├── logs/             # 日志
-├── temp/             # 临时文件
-└── tools/aria2/      # 自动下载的 aria2
+├── neko-down.ps1            CLI 入口（225 行薄壳，dot-source lib/*）
+├── config.json              共享配置
+├── lang.json                中英双语字典（125 keys）
+├── lib/
+│   ├── core.ps1             下载核心（API、aria2、Start-FileDownload）
+│   ├── i18n.ps1             本地化（L 函数 + lang.json 加载）
+│   ├── log.ps1              Logger 类 + 控制台输出助手
+│   └── tauri-bridge.ps1     供 Rust 调用的 JSON-lines 桥接
+├── gui-tauri/               Tauri 2 GUI 项目
+│   ├── src/                 前端 (HTML + CSS + JS)
+│   └── src-tauri/           后端 (Rust)
+└── 双击运行.cmd              CLI 启动器
 ```
+
+GUI 采用 Tauri 架构：Rust 后端是 GUI 壳子和进程编排，下载实际由 PowerShell 端复用 `lib/` 完成。前端通过 `invoke()` 调 Rust 命令，进度通过 Tauri event 实时回流到 ProgressBar。
+
+---
+
+## 🔧 从源码构建
+
+### CLI
+
+无需构建，直接运行 `.\neko-down.ps1`。
+
+### GUI
+
+需要：
+
+- [Rust](https://rustup.rs/)（rustup 一键装）
+- [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)（含"使用 C++ 的桌面开发"工作负载）
+- WebView2 运行时（Win10/11 自带）
+
+```powershell
+cd gui-tauri
+cargo install tauri-cli --locked
+cargo tauri dev          # 开发模式（热重载）
+cargo tauri build        # 出 release .exe + NSIS 安装器
+```
+
+构建产物在 `gui-tauri/src-tauri/target/release/`：
+
+- `nekodown-gui.exe` — 便携可执行
+- `bundle/nsis/NekoDown_*_x64-setup.exe` — NSIS 安装器
 
 ---
 
 ## ❓ 常见问题
 
-### Q: 双击后窗口一闪而过？
-1. 检查网络（首次运行需下载 aria2）
-2. 路径不要含特殊字符
-3. 查看 `logs/` 排查错误
+### 双击 .cmd 后窗口闪退
 
-### Q: 提示 "aria2 not found"？
-- v3.2+ 会自动下载。若失败，手动安装：`winget install aria2.aria2`
+CLI 模式下：检查 `logs/` 里的日志，通常是 aria2 自动安装失败（首次运行需要联网）。手动安装：`winget install aria2.aria2`。
 
-### Q: 下载速度很慢？
-- 建议线程数 32+（NekoGAL 的 R2 存储支持高并发）
-- 尝试不同时段下载
-- 检查代理连通性
+### 下载提示 403 Forbidden
 
-### Q: 403 Access Denied？
-- v3.1+ 已修复。如仍有问题，检查是否使用代理/VPN
+NekoGAL 的 R2 存储有时对单一 IP 限速；脚本已配置浏览器级请求头。建议挂代理或换时段。
 
-### Q: 文件名乱码？
-- v3.1+ 强制 UTF-8，已修复。旧版 Windows 请更新 PowerShell
+### GUI 没反应 / 白屏
 
-### Q: 下载中断如何继续？
-- 重新运行脚本，选择相同文件
-- 脚本自动检测 `.aria2` 控制文件并恢复下载
+检查 WebView2 是否安装：`Get-AppxPackage Microsoft.WebView2`。Win10 较老版本可能需要单独装一下：https://developer.microsoft.com/microsoft-edge/webview2/
 
-### Q: 可以下载文件夹吗？
-- 可以。脚本自动递归展开子目录，输入 `all` 下载全部
+### 中日文文件名乱码
 
-### Q: 可以放在 U 盘使用吗？
-- **可以**。绿色便携，复制到 U 盘即可在任何 Windows 电脑上使用
+`v3.0+` 强制 UTF-8。如果旧 Windows 还是乱码，去"区域设置 → 管理 → 更改系统区域设置"勾选"使用 Unicode UTF-8 提供全球语言支持"。
 
----
+### 想下载 NekoGAL 之外的 Cloudreve 网盘？
 
-## 🔧 高级用法
-
-```powershell
-# 交互模式
-.\neko-down.ps1
-
-# 直接传入链接
-.\neko-down.ps1 -ShareLink "https://pan.nekogal.top/s/xxxxx"
-
-# 指定目录和线程数
-.\neko-down.ps1 -ShareLink "..." -OutputDir "D:\Downloads" -Aria2Connections 32
-```
-
-### 推荐线程数
-
-| 网络环境 | 推荐线程 | 说明 |
-|----------|---------|------|
-| 100M 宽带 | 16-24 | R2 对多线程友好 |
-| 500M 宽带 | 24-32 | 推荐设置 |
-| 1000M 宽带 | 32-64 | 充分利用带宽 |
-| 代理/VPN | 8-16 | 代理可能成为瓶颈 |
+支持。Parse-ShareLink 自动识别 `https://pan.xxx.com/s/xxxxx` 任何 Cloudreve v4 实例。
 
 ---
 
 ## 📝 更新日志
 
-### v3.2 (2026-04-28)
-- ✨ **自动安装 aria2** - 首次运行自动下载，优先 winget，失败 fallback GitHub
-- ✨ **多语言支持** - 默认中文，config.json 切换 `zh-CN`/`en-US`
-- ✨ **递归目录下载** - 自动展开子文件夹，保留目录结构
-- ✨ **断点续传** - 检测 `.aria2` 控制文件，中断后自动恢复
-- ✨ **文件名安全处理** - 替换 Windows 非法字符，处理保留名
-- 🔧 修复单文件列表显示异常、Share ID 编码解析、Logger 空引用崩溃
+详见 [GitHub Releases](https://github.com/Arcohyp/NekoDown/releases)。
 
-### v3.1 (2026-04-26)
-- ✨ NekoGAL 深度优化：R2 存储适配、浏览器级请求头、跨环境兼容
-- 🔧 修复 aria2 参数解析、URL 预检误报、temp 目录缺失
+### v3.3.0 (2026-05)
 
-### v3.0 (2026-04-26)
-- ✨ 全新界面、安全退出、配置文件、磁盘检查、日志记录、自动重试
+- 🎉 全新 GUI（Tauri + WebView2），单文件 .exe，4 主题切换
+- 🏗️ 重构：抽出 `lib/`，CLI 与 GUI 共用同一份下载核心
+- 📦 NSIS 安装器自动构建（GitHub Actions）
+- 🌐 `lang.json` 升级为中英完整字典
 
----
+### v3.2.x (2026-04)
 
-## ⚠️ 注意事项
+- aria2 退出码翻译、断点续传修复、文件名清洗、自动安装 aria2
 
-1. **链接有效期** - Cloudreve 临时下载链接约 1 小时有效，脚本自动刷新
-2. **磁盘空间** - 下载前自动检查，确保有足够空间
-3. **杀毒软件** - 部分杀软可能误报 PowerShell 脚本，请添加信任
-4. **版权归原作者** - 本工具仅供下载自己有权访问的文件
+### v3.1.x (2026-04)
+
+- NekoGAL 深度优化：R2 存储适配、浏览器请求头、跨环境兼容
 
 ---
 
-**Made with ❤️ for [NekoGAL](https://www.nekogal.com/) & Cloudreve users**
+## ⚠️ 注意
+
+- Cloudreve 临时下载链接约 1 小时有效，脚本自动刷新
+- 部分杀毒软件可能误报 PowerShell 脚本，请添加信任
+- 版权归原作者，本工具仅供下载自己有权访问的内容
+
+---
+
+**Made with 🐾 for the [NekoGAL](https://www.nekogal.com/) community.**

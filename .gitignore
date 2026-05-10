@@ -11,7 +11,7 @@ logs/*
 !logs/.gitkeep
 
 # Auto-downloaded binaries (aria2 portable, ModernWpfUI assemblies)
-tools/
+/tools/
 lib/*.dll
 
 # OS files
