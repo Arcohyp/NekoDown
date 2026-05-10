@@ -43,11 +43,13 @@
               <button id="deselect-btn" class="btn btn-ghost">清空</button>
             </div>
           </div>
-          <div id="files-empty" class="placeholder">
-            <div class="placeholder-icon">🌙</div>
-            <div class="placeholder-text">还没有文件，先粘贴一个链接吧</div>
+          <div class="panel-body">
+            <ul id="files-list" class="files-list"></ul>
+            <div id="files-empty" class="placeholder">
+              <div class="placeholder-icon">🌙</div>
+              <div class="placeholder-text">还没有文件，先粘贴一个链接吧</div>
+            </div>
           </div>
-          <ul id="files-list" class="files-list"></ul>
         </div>
 
         <div class="panel progress-panel">
@@ -55,9 +57,12 @@
             <h2>下载进度</h2>
             <button id="open-folder-btn" class="btn btn-ghost" title="打开下载目录">📁</button>
           </div>
-          <ul id="progress-list" class="progress-list"></ul>
-          <div id="progress-empty" class="placeholder small">
-            <span>下载任务会显示在这里</span>
+          <div class="panel-body">
+            <ul id="progress-list" class="progress-list"></ul>
+            <div id="progress-empty" class="placeholder">
+              <div class="placeholder-icon">📥</div>
+              <div class="placeholder-text">下载任务会显示在这里</div>
+            </div>
           </div>
         </div>
       </section>

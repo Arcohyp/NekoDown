@@ -229,14 +229,36 @@ html, body {
 }
 .panel-actions { display: flex; gap: 6px; }
 
-.files-list {
+.panel-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.files-list,
+.progress-list {
+  position: absolute;
+  inset: 0;
   list-style: none;
   margin: 0;
   padding: 6px;
   overflow-y: auto;
-  flex: 1;
-  min-height: 0;
 }
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+  pointer-events: none;
+  text-align: center;
+  padding: 24px;
+}
+.placeholder-icon { font-size: 32px; opacity: 0.85; }
 .file-row {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -265,27 +287,10 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
-.progress-list {
-  list-style: none;
-  margin: 0;
-  padding: 6px;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
+.progress-list:empty {
+  /* keep absolute positioning so layout doesn't shift; placeholder overlays */
 }
-.placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  color: var(--text-muted);
-  gap: 8px;
-  padding: 24px;
-  font-size: 13px;
-}
-.placeholder.small { font-size: 12px; padding: 16px; }
-.placeholder-icon { font-size: 32px; }
+.placeholder.hidden { display: none !important; }
 
 .progress-row {
   padding: 10px 12px;
