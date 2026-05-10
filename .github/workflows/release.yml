@@ -41,23 +41,43 @@ jobs:
             ### Downloads
 
             - `NekoDown_*_x64-setup.exe` — NSIS installer (recommended)
-            - `nekodown-gui.exe` — portable executable
+            - `NekoDown_*_x64-portable.zip` — portable zip (extract and run nekodown-gui.exe)
 
             See README for usage.
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: false
 
-      - name: Upload portable executable
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $zipName = "NekoDown_${tag}_x64-portable.zip"
+          $tmp = New-Item -ItemType Directory -Path "portable-tmp"
+          # Copy exe
+          Copy-Item "gui-tauri/src-tauri/target/release/nekodown-gui.exe" "$tmp/nekodown-gui.exe"
+          # Copy resources
+          Copy-Item -Recurse "lib" "$tmp/lib"
+          Copy-Item "lang.json" "$tmp/lang.json"
+          Copy-Item "config.json" "$tmp/config.json"
+          Copy-Item "neko-down.ps1" "$tmp/neko-down.ps1"
+          Copy-Item "双击运行.cmd" "$tmp/双击运行.cmd"
+          Copy-Item "README.md" "$tmp/README.md"
+          # Create zip
+          Compress-Archive -Path "$tmp/*" -DestinationPath $zipName
+          Remove-Item -Recurse -Force $tmp
+          Write-Host "Created $zipName"
+
+      - name: Upload portable zip
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "${{ github.ref_name }}"
-          $exe = "gui-tauri/src-tauri/target/release/nekodown-gui.exe"
-          if (Test-Path $exe) {
-            gh release upload $tag $exe --repo Arcohyp/NekoDown --clobber
+          $zip = "NekoDown_${tag}_x64-portable.zip"
+          if (Test-Path $zip) {
+            gh release upload $tag $zip --repo Arcohyp/NekoDown --clobber
           } else {
-            Write-Host "Portable exe not found at $exe"
+            Write-Host "Portable zip not found at $zip"
             exit 1
           }

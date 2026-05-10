@@ -22,7 +22,15 @@ fn find_project_root() -> anyhow::Result<PathBuf> {
             if !cur.pop() { break; }
         }
     }
-    Err(anyhow::anyhow!("could not locate NekoDown project root (looking for lib/core.ps1)"))
+    Err(anyhow::anyhow!(
+        "找不到 NekoDown 核心文件 lib/core.ps1。\\n\\n\
+        可能原因：\\n\
+        1. 你移动了 nekodown-gui.exe 但没有把 lib/ 文件夹一起移动\\n\
+        2. 使用的是便携版 zip，但没有完整解压\\n\\n\
+        解决方案：\\n\
+        • 确保 nekodown-gui.exe 旁边有 lib/ 文件夹\\n\
+        • 或重新下载完整安装包 / 便携 zip 并完整解压"
+    ))
 }
 
 fn bridge_path() -> Result<PathBuf, String> {
