@@ -6,8 +6,12 @@ use tauri::{AppHandle, Emitter};
 
 fn find_project_root() -> anyhow::Result<PathBuf> {
     // Walk upward from the running exe and the current working directory
-    // looking for `lib/core.ps1`. Works in both `cargo tauri dev` (cwd is
-    // src-tauri/) and the bundled exe (next to lib/ once shipped).
+    // looking for `lib/core.ps1`.
+    // Covers three layouts:
+    //   1. Dev / portable / NSIS side-by-side:  exe 旁边直接有 lib/
+    //   2. Tauri bundled resources/:             exe 旁边有 resources/lib/
+    //   3. Source checkout:                      exe 在 gui-tauri/src-tauri/target/
+    //                                             向上走到项目根目录
     let mut starts: Vec<PathBuf> = Vec::new();
     if let Ok(p) = std::env::current_exe() {
         if let Some(d) = p.parent() { starts.push(d.to_path_buf()); }
@@ -16,8 +20,13 @@ fn find_project_root() -> anyhow::Result<PathBuf> {
     for start in starts {
         let mut cur = start.clone();
         for _ in 0..8 {
+            // Layout 1: direct
             if cur.join("lib").join("core.ps1").exists() {
                 return Ok(cur);
+            }
+            // Layout 2: Tauri resources/ subdir (NSIS installer default)
+            if cur.join("resources").join("lib").join("core.ps1").exists() {
+                return Ok(cur.join("resources"));
             }
             if !cur.pop() { break; }
         }
@@ -26,7 +35,8 @@ fn find_project_root() -> anyhow::Result<PathBuf> {
         "找不到 NekoDown 核心文件 lib/core.ps1。\\n\\n\
         可能原因：\\n\
         1. 你移动了 nekodown-gui.exe 但没有把 lib/ 文件夹一起移动\\n\
-        2. 使用的是便携版 zip，但没有完整解压\\n\\n\
+        2. 使用的是便携版 zip，但没有完整解压\\n\
+        3. 使用的是安装包，但安装目录被手动修改过\\n\\n\
         解决方案：\\n\
         • 确保 nekodown-gui.exe 旁边有 lib/ 文件夹\\n\
         • 或重新下载完整安装包 / 便携 zip 并完整解压"
