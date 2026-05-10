@@ -44,14 +44,47 @@ function setStatus(text, kind) {
 
 async function loadI18n() {
   try {
-    const cfg = await invoke("get_config");
-    const lang = cfg?.language || "auto";
+    let cfg = await invoke("get_config");
+    let lang = cfg?.language;
+    if (!lang || lang === "auto") {
+      const detected = await invoke("get_lang_strings", { lang: "auto" });
+      lang = detected.lang;
+      const toSave = Object.assign({}, cfg, { language: lang });
+      if (toSave.logEnabled === undefined) toSave.logEnabled = true;
+      await invoke("save_config", { cfg: toSave });
+    }
     const result = await invoke("get_lang_strings", { lang });
     i18nLang = result.lang;
     i18nStrings = result.strings || {};
   } catch (e) {
     console.error("i18n load failed", e);
   }
+}
+
+function updateLangBtn() {
+  const btn = $("lang-btn");
+  if (btn) btn.textContent = i18nLang === "zh-CN" ? "中" : "EN";
+}
+
+async function switchLanguage(targetLang) {
+  try {
+    const result = await invoke("get_lang_strings", { lang: targetLang });
+    i18nLang = result.lang;
+    i18nStrings = result.strings || {};
+    applyI18n();
+    updateLangBtn();
+    const cfg = await invoke("get_config");
+    const toSave = Object.assign({}, cfg, { language: targetLang });
+    if (toSave.logEnabled === undefined) toSave.logEnabled = true;
+    await invoke("save_config", { cfg: toSave });
+  } catch (e) {
+    console.error("lang switch failed", e);
+  }
+}
+
+function cycleLang() {
+  const next = i18nLang === "zh-CN" ? "en-US" : "zh-CN";
+  switchLanguage(next);
 }
 
 function applyI18n() {
@@ -72,6 +105,7 @@ async function init() {
 
   await loadI18n();
   applyI18n();
+  updateLangBtn();
 
   try {
     state.outputDir = await invoke("get_default_output_dir");
@@ -101,7 +135,7 @@ async function init() {
     if (e.target.id === "settings-overlay") closeSettings();
   });
   $("settings-save").addEventListener("click", applySettings);
-  $("cfg-browse").addEventListener("click", browseSettingsDir);
+  $("lang-btn").addEventListener("click", cycleLang);
 
   await listen("download-event", (e) => onDownloadEvent(e.payload));
   await listen("download-log", (e) => console.log("[ps]", e.payload?.line));
@@ -366,8 +400,7 @@ async function tryAutoPaste() {
 async function openSettings() {
   let cfg = {};
   try { cfg = await invoke("get_config"); } catch (e) { console.error(e); }
-  $("cfg-language").value      = cfg.language || "auto";
-  $("cfg-outputDir").value     = cfg.defaultOutputDir || "";
+  $("cfg-language").value      = cfg.language || i18nLang;
   $("cfg-connections").value   = cfg.defaultConnections ?? 16;
   $("cfg-autoRetry").checked   = cfg.autoRetry ?? true;
   $("cfg-maxRetries").value    = cfg.maxRetries ?? 3;
@@ -383,7 +416,7 @@ function closeSettings() {
 async function applySettings() {
   const cfg = {
     language: $("cfg-language").value,
-    defaultOutputDir: $("cfg-outputDir").value.trim(),
+    defaultOutputDir: state.outputDir,
     defaultConnections: Number($("cfg-connections").value) || 16,
     autoRetry: $("cfg-autoRetry").checked,
     maxRetries: Number($("cfg-maxRetries").value) || 3,
@@ -394,24 +427,16 @@ async function applySettings() {
   };
   try {
     await invoke("save_config", { cfg });
-    state.outputDir = cfg.defaultOutputDir;
     state.defaultConnections = cfg.defaultConnections;
-    $("output-dir").textContent = state.outputDir;
-    const oldLang = i18nLang;
-    await loadI18n();
-    if (i18nLang !== oldLang) applyI18n();
+    const chosenLang = cfg.language;
+    if (chosenLang !== i18nLang) {
+      await switchLanguage(chosenLang);
+    }
     $("settings-msg").textContent = t("save_settings");
   } catch (e) {
     $("settings-msg").textContent = "Error: " + (e?.message || e);
     $("settings-msg").style.color = "var(--danger)";
   }
-}
-async function browseSettingsDir() {
-  if (!open) return;
-  try {
-    const picked = await open({ directory: true, defaultPath: $("cfg-outputDir").value || state.outputDir });
-    if (picked) $("cfg-outputDir").value = picked;
-  } catch (e) { console.error(e); }
 }
 
 function escapeHtml(s) {

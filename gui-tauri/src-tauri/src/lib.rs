@@ -163,17 +163,32 @@ fn save_config(cfg: Value) -> Result<(), String> {
 
 fn resolve_language(lang: &str) -> String {
     if lang == "auto" || lang.is_empty() {
-        // Look at the OS locale; default to en-US if anything looks off.
-        let locale = std::env::var("LANG")
-            .ok()
-            .or_else(|| std::env::var("LANGUAGE").ok())
-            .unwrap_or_default();
-        if locale.starts_with("zh") {
-            return "zh-CN".to_string();
+        // 1. Linux / macOS: LANG / LANGUAGE env vars
+        if let Ok(l) = std::env::var("LANG") {
+            if l.to_lowercase().starts_with("zh") {
+                return "zh-CN".to_string();
+            }
         }
-        // On Windows, fall back to GetUserDefaultLocaleName via PowerShell-free probe:
-        // the system locale env vars above may be empty. Use the legacy registry-derived
-        // default — for now just return en-US as fallback.
+        if let Ok(l) = std::env::var("LANGUAGE") {
+            if l.to_lowercase().starts_with("zh") {
+                return "zh-CN".to_string();
+            }
+        }
+        // 2. Windows: PowerShell Get-UICulture is reliable where env vars are empty
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(output) = std::process::Command::new("powershell")
+                .args(["-NoProfile", "-Command", "(Get-UICulture).Name"])
+                .output()
+            {
+                let locale = String::from_utf8_lossy(&output.stdout)
+                    .trim()
+                    .to_lowercase();
+                if locale.starts_with("zh") {
+                    return "zh-CN".to_string();
+                }
+            }
+        }
         return "en-US".to_string();
     }
     lang.to_string()
