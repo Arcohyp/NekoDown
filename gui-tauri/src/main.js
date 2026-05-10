@@ -14,15 +14,14 @@ const state = {
   downloading: false,
 };
 
-let i18nStrings = {};
+let i18nStrings = null; // null = not loaded yet
 let i18nLang = "zh-CN";
 
 function t(key, ...args) {
-  let s = i18nStrings[key] || key;
-  if (args.length) {
-    args.forEach((a, i) => { s = s.replaceAll(`{${i}}`, a); });
-  }
-  return s;
+  // If i18n hasn't loaded, return the key so callers can still show something
+  const s = i18nStrings?.[key] ?? key;
+  if (!args.length) return s;
+  return args.reduce((acc, a, i) => acc.replaceAll(`{${i}}`, a), s);
 }
 
 function fmtSize(n) {
@@ -56,8 +55,10 @@ async function loadI18n() {
     const result = await invoke("get_lang_strings", { lang });
     i18nLang = result.lang;
     i18nStrings = result.strings || {};
+    return true;
   } catch (e) {
     console.error("i18n load failed", e);
+    return false;
   }
 }
 
@@ -77,8 +78,12 @@ async function switchLanguage(targetLang) {
     const toSave = Object.assign({}, cfg, { language: targetLang });
     if (toSave.logEnabled === undefined) toSave.logEnabled = true;
     await invoke("save_config", { cfg: toSave });
+    return true;
   } catch (e) {
     console.error("lang switch failed", e);
+    const msg = typeof e === "string" ? e : (e?.message || String(e));
+    setStatus("Lang error: " + msg, "error");
+    return false;
   }
 }
 
@@ -103,8 +108,8 @@ async function init() {
   const savedTheme = localStorage.getItem("nekodown.theme");
   if (savedTheme) document.body.dataset.theme = savedTheme;
 
-  await loadI18n();
-  applyI18n();
+  const i18nOk = await loadI18n();
+  if (i18nOk) applyI18n();
   updateLangBtn();
 
   try {

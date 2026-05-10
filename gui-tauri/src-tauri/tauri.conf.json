@@ -33,6 +33,15 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "../../lib": "lib",
+      "../../lang.json": "lang.json",
+      "../../config.json": "config.json",
+      "../../neko-down.ps1": "neko-down.ps1",
+      "../../双击运行.cmd": "双击运行.cmd",
+      "../../README.md": "README.md",
+      "../../LICENSE": "LICENSE"
+    }
   }
 }
