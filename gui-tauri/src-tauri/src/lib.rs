@@ -141,16 +141,75 @@ fn open_folder(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_config() -> Result<Value, String> {
+    let root = find_project_root().map_err(|e| e.to_string())?;
+    let cfg_path = root.join("config.json");
+    if !cfg_path.exists() {
+        return Ok(serde_json::json!({}));
+    }
+    let raw = std::fs::read_to_string(&cfg_path).map_err(|e| e.to_string())?;
+    serde_json::from_str::<Value>(&raw).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_config(cfg: Value) -> Result<(), String> {
+    let root = find_project_root().map_err(|e| e.to_string())?;
+    let cfg_path = root.join("config.json");
+    let pretty = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?;
+    std::fs::write(&cfg_path, pretty).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn resolve_language(lang: &str) -> String {
+    if lang == "auto" || lang.is_empty() {
+        // Look at the OS locale; default to en-US if anything looks off.
+        let locale = std::env::var("LANG")
+            .ok()
+            .or_else(|| std::env::var("LANGUAGE").ok())
+            .unwrap_or_default();
+        if locale.starts_with("zh") {
+            return "zh-CN".to_string();
+        }
+        // On Windows, fall back to GetUserDefaultLocaleName via PowerShell-free probe:
+        // the system locale env vars above may be empty. Use the legacy registry-derived
+        // default — for now just return en-US as fallback.
+        return "en-US".to_string();
+    }
+    lang.to_string()
+}
+
+#[tauri::command]
+fn get_lang_strings(lang: String) -> Result<Value, String> {
+    let root = find_project_root().map_err(|e| e.to_string())?;
+    let lang_path = root.join("lang.json");
+    let raw = std::fs::read_to_string(&lang_path).map_err(|e| e.to_string())?;
+    let json: Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    let resolved = resolve_language(&lang);
+    let strings = json.get(&resolved)
+        .or_else(|| json.get("en-US"))
+        .cloned()
+        .ok_or_else(|| format!("language '{}' not found in lang.json", resolved))?;
+    Ok(serde_json::json!({
+        "lang": resolved,
+        "strings": strings,
+    }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
             parse_share,
             start_download,
             get_default_output_dir,
             open_folder,
+            get_config,
+            save_config,
+            get_lang_strings,
         ])
         .setup(|_app| Ok(()))
         .run(tauri::generate_context!())

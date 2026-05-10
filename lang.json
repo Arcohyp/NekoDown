@@ -125,7 +125,17 @@
         "failed_status":             "Failed",
         "skipped_status":            "Skipped",
         "modernwpf_downloading":     "Downloading ModernWpfUI theme...",
-        "modernwpf_failed":          "Failed to download ModernWpfUI theme. Falling back to default WPF style."
+        "modernwpf_failed":          "Failed to download ModernWpfUI theme. Falling back to default WPF style.",
+
+        "downloads_count":           "Downloads",
+        "placeholder_files":         "No files yet, paste a link first",
+        "placeholder_progress":      "Download tasks will appear here",
+        "open_download_directory":   "Open download directory",
+        "auto_paste_ok":             "Auto-filled from clipboard",
+        "parse_success":             "Parsed successfully, {0} file(s)",
+        "parse_failed":              "Parse failed: ",
+        "parse_error":               "Please paste a link first",
+        "no_selected":               "No files selected"
     },
     "zh-CN": {
         "aria2_not_found":           "aria2 未找到！正在尝试自动安装...",
@@ -253,6 +263,16 @@
         "failed_status":             "失败",
         "skipped_status":            "已跳过",
         "modernwpf_downloading":     "正在下载 ModernWpfUI 主题...",
-        "modernwpf_failed":          "下载 ModernWpfUI 主题失败，将回退到 WPF 默认样式。"
+        "modernwpf_failed":          "下载 ModernWpfUI 主题失败，将回退到 WPF 默认样式。",
+
+        "downloads_count":           "下载次数",
+        "placeholder_files":         "还没有文件，先粘贴一个链接吧",
+        "placeholder_progress":      "下载任务会显示在这里",
+        "open_download_directory":   "打开下载目录",
+        "auto_paste_ok":             "已从剪贴板自动填充",
+        "parse_success":             "解析成功，共 {0} 个文件",
+        "parse_failed":              "解析失败：",
+        "parse_error":               "请先粘贴链接",
+        "no_selected":               "没有选中的文件"
     }
 }

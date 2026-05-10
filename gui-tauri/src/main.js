@@ -1,6 +1,7 @@
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const { open } = window.__TAURI__.dialog || {};
+const { readText } = (window.__TAURI__.clipboardManager || {});
 
 const state = {
   domain: "",
@@ -9,8 +10,20 @@ const state = {
   outputDir: "",
   defaultConnections: 16,
   progressByPath: new Map(),
+  sparkData: new Map(),
   downloading: false,
 };
+
+let i18nStrings = {};
+let i18nLang = "zh-CN";
+
+function t(key, ...args) {
+  let s = i18nStrings[key] || key;
+  if (args.length) {
+    args.forEach((a, i) => { s = s.replaceAll(`{${i}}`, a); });
+  }
+  return s;
+}
 
 function fmtSize(n) {
   if (!n) return "0 B";
@@ -29,10 +42,36 @@ function setStatus(text, kind) {
   el.className = "status" + (kind ? " " + kind : "");
 }
 
+async function loadI18n() {
+  try {
+    const cfg = await invoke("get_config");
+    const lang = cfg?.language || "auto";
+    const result = await invoke("get_lang_strings", { lang });
+    i18nLang = result.lang;
+    i18nStrings = result.strings || {};
+  } catch (e) {
+    console.error("i18n load failed", e);
+  }
+}
+
+function applyI18n() {
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach(el => {
+    el.title = t(el.dataset.i18nTitle);
+  });
+}
+
 async function init() {
-  // Restore theme preference
   const savedTheme = localStorage.getItem("nekodown.theme");
   if (savedTheme) document.body.dataset.theme = savedTheme;
+
+  await loadI18n();
+  applyI18n();
 
   try {
     state.outputDir = await invoke("get_default_output_dir");
@@ -56,10 +95,21 @@ async function init() {
   $("choose-dir-btn").addEventListener("click", chooseDir);
   $("theme-btn").addEventListener("click", cycleTheme);
 
+  $("settings-btn").addEventListener("click", openSettings);
+  $("settings-close").addEventListener("click", closeSettings);
+  $("settings-overlay").addEventListener("click", (e) => {
+    if (e.target.id === "settings-overlay") closeSettings();
+  });
+  $("settings-save").addEventListener("click", applySettings);
+  $("cfg-browse").addEventListener("click", browseSettingsDir);
+
   await listen("download-event", (e) => onDownloadEvent(e.payload));
   await listen("download-log", (e) => console.log("[ps]", e.payload?.line));
 
-  setStatus("就绪");
+  window.addEventListener("focus", tryAutoPaste);
+  await tryAutoPaste();
+
+  setStatus(t("ready"));
 }
 
 const THEMES = ["neko", "moonlight", "sakura", "forest"];
@@ -85,14 +135,14 @@ async function chooseDir() {
 
 async function onParse() {
   const link = $("link-input").value.trim();
-  if (!link) { setStatus("请先粘贴链接", "error"); return; }
+  if (!link) { setStatus(t("parse_error"), "error"); return; }
   $("parse-btn").disabled = true;
   $("download-btn").disabled = true;
-  setStatus("正在解析…");
+  setStatus(t("parsing"));
   try {
     const result = await invoke("parse_share", { link });
     if (!result.ok) {
-      setStatus("解析失败：" + (result.error || "未知错误"), "error");
+      setStatus(t("parse_failed") + (result.error || t("unknown")), "error");
       return;
     }
     state.shareId = result.shareId;
@@ -117,10 +167,10 @@ async function onParse() {
     }
 
     renderFiles();
-    setStatus(`解析成功，共 ${state.files.length} 个文件`, "success");
+    setStatus(t("parse_success", state.files.length), "success");
     $("download-btn").disabled = state.files.length === 0;
   } catch (e) {
-    setStatus("解析异常：" + (e?.message || e), "error");
+    setStatus(t("parse_failed") + (e?.message || e), "error");
     console.error(e);
   } finally {
     $("parse-btn").disabled = false;
@@ -164,15 +214,16 @@ function getSelectedFiles() {
 
 async function onDownload() {
   const selected = getSelectedFiles();
-  if (selected.length === 0) { setStatus("没有选中的文件", "error"); return; }
+  if (selected.length === 0) { setStatus(t("no_selected"), "error"); return; }
   state.downloading = true;
   $("download-btn").disabled = true;
   $("parse-btn").disabled = true;
-  setStatus(`正在下载 (${selected.length})…`);
+  setStatus(t("downloading") + ` (${selected.length})…`);
 
   const progressList = $("progress-list");
   progressList.innerHTML = "";
   state.progressByPath.clear();
+  state.sparkData.clear();
   selected.forEach((f) => {
     const id = f.path;
     const li = document.createElement("li");
@@ -183,19 +234,21 @@ async function onDownload() {
       <div class="row-top">
         <span class="progress-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
         <span class="progress-meta">${fmtSize(f.size)}</span>
-        <span class="progress-status running">排队中</span>
+        <span class="progress-status running">${t("queued")}</span>
+        <canvas class="spark" width="64" height="18"></canvas>
       </div>
       <div class="progress-bar"><div class="progress-bar-fill"></div></div>
     `;
     progressList.appendChild(li);
     state.progressByPath.set(id, li);
+    state.sparkData.set(id, []);
   });
   $("progress-empty").classList.add("hidden");
 
   let success = 0, failed = 0;
   for (const f of selected) {
     const li = state.progressByPath.get(f.path);
-    li.querySelector(".progress-status").textContent = "下载中";
+    li.querySelector(".progress-status").textContent = t("downloading");
     try {
       await invoke("start_download", {
         file: f,
@@ -205,13 +258,13 @@ async function onDownload() {
       });
       const status = li.querySelector(".progress-status");
       status.className = "progress-status done";
-      status.textContent = "完成";
+      status.textContent = t("completed_status");
       li.querySelector(".progress-bar-fill").style.width = "100%";
       success++;
     } catch (e) {
       const status = li.querySelector(".progress-status");
       status.className = "progress-status failed";
-      status.textContent = "失败";
+      status.textContent = t("failed_status");
       console.error("download failed", f.path, e);
       failed++;
     }
@@ -219,14 +272,13 @@ async function onDownload() {
   state.downloading = false;
   $("download-btn").disabled = false;
   $("parse-btn").disabled = false;
-  setStatus(`完成 ${success} / 共 ${selected.length}` + (failed ? `（失败 ${failed}）` : ""), failed ? "error" : "success");
+  setStatus(t("completed", success, failed), failed ? "error" : "success");
 }
 
 function onDownloadEvent(payload) {
   if (!payload || !payload.event) return;
   if (payload.event === "progress") {
     const file = payload.file || "";
-    // Find the row whose name ends with this file
     let row;
     state.progressByPath.forEach((li) => {
       const nameEl = li.querySelector(".progress-name");
@@ -240,7 +292,123 @@ function onDownloadEvent(payload) {
     row.querySelector(".progress-bar-fill").style.width = pct.toFixed(1) + "%";
     const meta = `${fmtSize(cur)} / ${fmtSize(total)} • ${fmtSpeed(speed)}`;
     row.querySelector(".progress-meta").textContent = meta;
+
+    const id = row.dataset.id;
+    const arr = state.sparkData.get(id);
+    if (arr) {
+      arr.push(speed);
+      if (arr.length > 60) arr.shift();
+      const canvas = row.querySelector(".spark");
+      if (canvas) drawSparkline(canvas, arr);
+    }
   }
+}
+
+function drawSparkline(canvas, data) {
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 64;
+  const cssH = canvas.clientHeight || 18;
+  if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
+    canvas.width = cssW * dpr;
+    canvas.height = cssH * dpr;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  if (!data || data.length < 2) return;
+  const max = Math.max(...data, 1);
+  const step = cssW / (data.length - 1);
+
+  ctx.beginPath();
+  const firstY = cssH - (data[0] / max) * cssH;
+  ctx.moveTo(0, firstY);
+  for (let i = 1; i < data.length; i++) {
+    ctx.lineTo(i * step, cssH - (data[i] / max) * cssH);
+  }
+  const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ff7eb6";
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+
+  ctx.lineTo((data.length - 1) * step, cssH);
+  ctx.lineTo(0, cssH);
+  ctx.closePath();
+  ctx.fillStyle = accent + "20";
+  ctx.fill();
+}
+
+/* ===== Clipboard auto-fill ===== */
+let lastPasteAttempt = 0;
+function looksLikeLink(text) {
+  return /https?:\/\//.test(text) &&
+    (text.includes("nekogal.top") || /\/s\/\w+/.test(text) || text.includes("home?path=cloudreve%3A"));
+}
+async function tryAutoPaste() {
+  if (!readText) return;
+  const now = Date.now();
+  if (now - lastPasteAttempt < 2000) return;
+  lastPasteAttempt = now;
+  const input = $("link-input");
+  if (input.value.trim()) return;
+  try {
+    const text = await readText();
+    if (!text || !looksLikeLink(text)) return;
+    input.value = text.trim();
+    setStatus(t("auto_paste_ok"), "success");
+  } catch (e) { /* ignore */ }
+}
+
+/* ===== Settings modal ===== */
+async function openSettings() {
+  let cfg = {};
+  try { cfg = await invoke("get_config"); } catch (e) { console.error(e); }
+  $("cfg-language").value      = cfg.language || "auto";
+  $("cfg-outputDir").value     = cfg.defaultOutputDir || "";
+  $("cfg-connections").value   = cfg.defaultConnections ?? 16;
+  $("cfg-autoRetry").checked   = cfg.autoRetry ?? true;
+  $("cfg-maxRetries").value    = cfg.maxRetries ?? 3;
+  $("cfg-checkDiskSpace").checked = cfg.checkDiskSpace ?? true;
+  $("cfg-minFreeSpace").value  = cfg.minFreeSpaceGB ?? 2;
+  $("cfg-proxy").value         = cfg.proxy || "";
+  $("settings-msg").textContent = "";
+  $("settings-overlay").classList.add("active");
+}
+function closeSettings() {
+  $("settings-overlay").classList.remove("active");
+}
+async function applySettings() {
+  const cfg = {
+    language: $("cfg-language").value,
+    defaultOutputDir: $("cfg-outputDir").value.trim(),
+    defaultConnections: Number($("cfg-connections").value) || 16,
+    autoRetry: $("cfg-autoRetry").checked,
+    maxRetries: Number($("cfg-maxRetries").value) || 3,
+    checkDiskSpace: $("cfg-checkDiskSpace").checked,
+    minFreeSpaceGB: Number($("cfg-minFreeSpace").value) || 2,
+    proxy: $("cfg-proxy").value.trim(),
+    logEnabled: true,
+  };
+  try {
+    await invoke("save_config", { cfg });
+    state.outputDir = cfg.defaultOutputDir;
+    state.defaultConnections = cfg.defaultConnections;
+    $("output-dir").textContent = state.outputDir;
+    const oldLang = i18nLang;
+    await loadI18n();
+    if (i18nLang !== oldLang) applyI18n();
+    $("settings-msg").textContent = t("save_settings");
+  } catch (e) {
+    $("settings-msg").textContent = "Error: " + (e?.message || e);
+    $("settings-msg").style.color = "var(--danger)";
+  }
+}
+async function browseSettingsDir() {
+  if (!open) return;
+  try {
+    const picked = await open({ directory: true, defaultPath: $("cfg-outputDir").value || state.outputDir });
+    if (picked) $("cfg-outputDir").value = picked;
+  } catch (e) { console.error(e); }
 }
 
 function escapeHtml(s) {

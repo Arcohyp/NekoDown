@@ -19,49 +19,50 @@
           <input
             id="link-input"
             class="link-input"
-            placeholder="粘贴 Cloudreve 分享链接，例如 https://pan.nekogal.top/s/xxxxx"
+            data-i18n-placeholder="example_placeholder"
             spellcheck="false"
           />
-          <button id="parse-btn" class="btn btn-primary">Parse</button>
+          <button id="parse-btn" class="btn btn-primary" data-i18n="parse">Parse</button>
+          <button id="settings-btn" class="btn btn-ghost" data-i18n-title="settings">⚙️</button>
           <button id="theme-btn" class="btn btn-ghost theme-btn" title="切换主题">🎨</button>
         </div>
       </header>
 
       <section id="share-info" class="share-info">
-        <div class="info-cell"><span class="info-label">名称</span><span id="info-name" class="info-value">—</span></div>
-        <div class="info-cell"><span class="info-label">所有者</span><span id="info-owner" class="info-value">—</span></div>
-        <div class="info-cell"><span class="info-label">浏览</span><span id="info-views" class="info-value">—</span></div>
-        <div class="info-cell"><span class="info-label">下载次数</span><span id="info-downloads" class="info-value">—</span></div>
+        <div class="info-cell"><span class="info-label" data-i18n="name">名称</span><span id="info-name" class="info-value">—</span></div>
+        <div class="info-cell"><span class="info-label" data-i18n="owner">所有者</span><span id="info-owner" class="info-value">—</span></div>
+        <div class="info-cell"><span class="info-label" data-i18n="views">浏览</span><span id="info-views" class="info-value">—</span></div>
+        <div class="info-cell"><span class="info-label" data-i18n="downloads_count">下载次数</span><span id="info-downloads" class="info-value">—</span></div>
       </section>
 
       <section class="content">
         <div class="panel files-panel">
           <div class="panel-head">
-            <h2>文件列表</h2>
+            <h2 data-i18n="file_list">文件列表</h2>
             <div class="panel-actions">
-              <button id="select-all-btn" class="btn btn-ghost">全选</button>
-              <button id="deselect-btn" class="btn btn-ghost">清空</button>
+              <button id="select-all-btn" class="btn btn-ghost" data-i18n="select_all">全选</button>
+              <button id="deselect-btn" class="btn btn-ghost" data-i18n="clear">清空</button>
             </div>
           </div>
           <div class="panel-body">
             <ul id="files-list" class="files-list"></ul>
             <div id="files-empty" class="placeholder">
               <div class="placeholder-icon">🌙</div>
-              <div class="placeholder-text">还没有文件，先粘贴一个链接吧</div>
+              <div class="placeholder-text" data-i18n="placeholder_files">还没有文件，先粘贴一个链接吧</div>
             </div>
           </div>
         </div>
 
         <div class="panel progress-panel">
           <div class="panel-head">
-            <h2>下载进度</h2>
-            <button id="open-folder-btn" class="btn btn-ghost" title="打开下载目录">📁</button>
+            <h2 data-i18n="download_progress">下载进度</h2>
+            <button id="open-folder-btn" class="btn btn-ghost" data-i18n-title="open_download_directory">📁</button>
           </div>
           <div class="panel-body">
             <ul id="progress-list" class="progress-list"></ul>
             <div id="progress-empty" class="placeholder">
               <div class="placeholder-icon">📥</div>
-              <div class="placeholder-text">下载任务会显示在这里</div>
+              <div class="placeholder-text" data-i18n="placeholder_progress">下载任务会显示在这里</div>
             </div>
           </div>
         </div>
@@ -69,15 +70,64 @@
 
       <footer class="footer">
         <div class="footer-left">
-          <span class="footer-label">下载到</span>
+          <span class="footer-label" data-i18n="download_directory">下载目录</span>
           <span id="output-dir" class="footer-value">…</span>
-          <button id="choose-dir-btn" class="btn btn-ghost btn-small">更改</button>
+          <button id="choose-dir-btn" class="btn btn-ghost btn-small" data-i18n="browse">更改</button>
         </div>
         <div class="footer-right">
           <span id="status" class="status">就绪</span>
-          <button id="download-btn" class="btn btn-primary btn-large" disabled>开始下载</button>
+          <button id="download-btn" class="btn btn-primary btn-large" disabled data-i18n="start_download">开始下载</button>
         </div>
       </footer>
     </main>
+
+    <div id="settings-overlay" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3 data-i18n="settings">设置</h3>
+          <button id="settings-close" class="btn btn-ghost btn-small">✕</button>
+        </div>
+        <div class="modal-body">
+          <label data-i18n="language_label">语言：</label>
+          <select id="cfg-language">
+            <option value="auto">Auto / 自动</option>
+            <option value="zh-CN">中文</option>
+            <option value="en-US">English</option>
+          </select>
+
+          <label data-i18n="download_directory">下载目录：</label>
+          <div class="input-row">
+            <input type="text" id="cfg-outputDir" />
+            <button id="cfg-browse" class="btn btn-ghost btn-small" data-i18n="browse">浏览…</button>
+          </div>
+
+          <label data-i18n="connections">连接数：</label>
+          <input type="number" id="cfg-connections" min="1" max="64" />
+
+          <label class="inline">
+            <input type="checkbox" id="cfg-autoRetry" />
+            <span data-i18n="auto_retry">自动重试</span>
+          </label>
+
+          <label data-i18n="max_retries">最大重试次数：</label>
+          <input type="number" id="cfg-maxRetries" min="0" max="20" />
+
+          <label class="inline">
+            <input type="checkbox" id="cfg-checkDiskSpace" />
+            <span data-i18n="check_disk_space">检查磁盘空间</span>
+          </label>
+
+          <label data-i18n="min_free_space">最小剩余空间 (GB)：</label>
+          <input type="number" id="cfg-minFreeSpace" min="0" step="0.5" />
+
+          <label>Proxy：</label>
+          <input type="text" id="cfg-proxy" placeholder="http://127.0.0.1:8080" />
+        </div>
+        <div class="modal-foot">
+          <span id="settings-msg" class="settings-msg"></span>
+          <button id="settings-save" class="btn btn-primary" data-i18n="apply">应用</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
