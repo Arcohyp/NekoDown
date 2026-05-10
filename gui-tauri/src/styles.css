@@ -142,13 +142,14 @@ html, body {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(255, 126, 182, 0.15);
 }
-.theme-btn {
-  font-size: 16px;
+.brand-actions .btn {
   width: 32px;
+  height: 32px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 14px;
 }
 
 .btn {
