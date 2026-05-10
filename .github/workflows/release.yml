@@ -25,6 +25,7 @@ jobs:
           workspaces: gui-tauri/src-tauri
 
       - name: Build Tauri release
+        id: tauri_build
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -39,10 +40,24 @@ jobs:
 
             ### Downloads
 
-            - `NekoDown_*_x64-setup.exe` &mdash; NSIS installer (recommended)
-            - `nekodown-gui.exe` &mdash; portable executable
+            - `NekoDown_*_x64-setup.exe` — NSIS installer (recommended)
+            - `nekodown-gui.exe` — portable executable
 
             See README for usage.
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: false
+
+      - name: Upload portable executable
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $exe = "gui-tauri/src-tauri/target/release/nekodown-gui.exe"
+          if (Test-Path $exe) {
+            gh release upload $tag $exe --repo Arcohyp/NekoDown --clobber
+          } else {
+            Write-Host "Portable exe not found at $exe"
+            exit 1
+          }
