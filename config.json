@@ -1,11 +1,11 @@
-{
-  "defaultOutputDir": "C:\\NekoDown\\downloads",
-  "defaultConnections": 16,
-  "autoRetry": true,
-  "maxRetries": 3,
-  "logEnabled": true,
-  "checkDiskSpace": true,
-  "minFreeSpaceGB": 2,
-  "proxy": "",
-  "language": "zh-CN"
+﻿{
+    "defaultOutputDir":  "C:\\CloudreveDownloader\\downloads",
+    "defaultConnections":  16,
+    "autoRetry":  true,
+    "maxRetries":  3,
+    "logEnabled":  true,
+    "checkDiskSpace":  true,
+    "minFreeSpaceGB":  2,
+    "proxy":  "",
+    "language":  "en-US"
 }

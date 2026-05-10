@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NekoDown</title>
+    <script type="module" src="/main.js" defer></script>
+  </head>
+  <body data-theme="neko">
+    <main class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">🐾</span>
+          <span class="brand-name">NekoDown</span>
+          <span class="brand-tag">v0.1.0</span>
+        </div>
+        <div class="link-row">
+          <input
+            id="link-input"
+            class="link-input"
+            placeholder="粘贴 Cloudreve 分享链接，例如 https://pan.nekogal.top/s/xxxxx"
+            spellcheck="false"
+          />
+          <button id="parse-btn" class="btn btn-primary">Parse</button>
+          <button id="theme-btn" class="btn btn-ghost theme-btn" title="切换主题">🎨</button>
+        </div>
+      </header>
+
+      <section id="share-info" class="share-info">
+        <div class="info-cell"><span class="info-label">名称</span><span id="info-name" class="info-value">—</span></div>
+        <div class="info-cell"><span class="info-label">所有者</span><span id="info-owner" class="info-value">—</span></div>
+        <div class="info-cell"><span class="info-label">浏览</span><span id="info-views" class="info-value">—</span></div>
+        <div class="info-cell"><span class="info-label">下载次数</span><span id="info-downloads" class="info-value">—</span></div>
+      </section>
+
+      <section class="content">
+        <div class="panel files-panel">
+          <div class="panel-head">
+            <h2>文件列表</h2>
+            <div class="panel-actions">
+              <button id="select-all-btn" class="btn btn-ghost">全选</button>
+              <button id="deselect-btn" class="btn btn-ghost">清空</button>
+            </div>
+          </div>
+          <div id="files-empty" class="placeholder">
+            <div class="placeholder-icon">🌙</div>
+            <div class="placeholder-text">还没有文件，先粘贴一个链接吧</div>
+          </div>
+          <ul id="files-list" class="files-list"></ul>
+        </div>
+
+        <div class="panel progress-panel">
+          <div class="panel-head">
+            <h2>下载进度</h2>
+            <button id="open-folder-btn" class="btn btn-ghost" title="打开下载目录">📁</button>
+          </div>
+          <ul id="progress-list" class="progress-list"></ul>
+          <div id="progress-empty" class="placeholder small">
+            <span>下载任务会显示在这里</span>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div class="footer-left">
+          <span class="footer-label">下载到</span>
+          <span id="output-dir" class="footer-value">…</span>
+          <button id="choose-dir-btn" class="btn btn-ghost btn-small">更改</button>
+        </div>
+        <div class="footer-right">
+          <span id="status" class="status">就绪</span>
+          <button id="download-btn" class="btn btn-primary btn-large" disabled>开始下载</button>
+        </div>
+      </footer>
+    </main>
+  </body>
+</html>

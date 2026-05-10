@@ -10,6 +10,10 @@ temp/*
 logs/*
 !logs/.gitkeep
 
+# Auto-downloaded binaries (aria2 portable, ModernWpfUI assemblies)
+tools/
+lib/*.dll
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -17,6 +21,9 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Claude Code local settings
+.claude/
 
 # User config (optional - if you want users to create their own)
 # config.json

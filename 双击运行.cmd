@@ -1,9 +1,9 @@
 @echo off
 chcp 65001 >nul
-title NekoDown v3.2
+title NekoDown v3.3
 cd /d "%~dp0"
 echo ========================================
-echo   NekoDown v3.2.0
+echo   NekoDown v3.3.0
 echo ========================================
 echo.
 
