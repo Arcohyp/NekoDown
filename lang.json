@@ -135,7 +135,16 @@
         "parse_success":             "Parsed successfully, {0} file(s)",
         "parse_failed":              "Parse failed: ",
         "parse_error":               "Please paste a link first",
-        "no_selected":               "No files selected"
+        "no_selected":               "No files selected",
+        "unknown":                   "Unknown error",
+        "theme":                     "Switch theme",
+        "proxy":                     "Proxy",
+        "not_configured":            "Not configured",
+        "theme_changed":             "Theme: {0}",
+        "theme_neko":                "Neko",
+        "theme_moonlight":           "Moonlight",
+        "theme_sakura":              "Sakura",
+        "theme_forest":              "Forest"
     },
     "zh-CN": {
         "aria2_not_found":           "aria2 未找到！正在尝试自动安装...",
@@ -273,6 +282,15 @@
         "parse_success":             "解析成功，共 {0} 个文件",
         "parse_failed":              "解析失败：",
         "parse_error":               "请先粘贴链接",
-        "no_selected":               "没有选中的文件"
+        "no_selected":               "没有选中的文件",
+        "unknown":                   "未知错误",
+        "theme":                     "切换主题",
+        "proxy":                     "代理",
+        "not_configured":            "未配置",
+        "theme_changed":             "主题：{0}",
+        "theme_neko":                "粉桃",
+        "theme_moonlight":           "月夜",
+        "theme_sakura":              "樱花",
+        "theme_forest":              "森林"
     }
 }

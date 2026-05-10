@@ -78,7 +78,7 @@ async function init() {
     $("output-dir").textContent = state.outputDir;
   } catch (e) {
     console.error("get_default_output_dir failed", e);
-    $("output-dir").textContent = "(未配置)";
+    $("output-dir").textContent = t("not_configured");
   }
 
   $("parse-btn").addEventListener("click", onParse);
@@ -113,13 +113,16 @@ async function init() {
 }
 
 const THEMES = ["neko", "moonlight", "sakura", "forest"];
-const THEME_LABELS = { neko: "🐾 粉桃", moonlight: "🌙 月夜", sakura: "🌸 樱花", forest: "🍃 森林" };
 function cycleTheme() {
   const cur = document.body.dataset.theme || "neko";
   const next = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
   document.body.dataset.theme = next;
   localStorage.setItem("nekodown.theme", next);
-  setStatus(`主题：${THEME_LABELS[next]}`);
+  const labels = {
+    neko: t("theme_neko"), moonlight: t("theme_moonlight"),
+    sakura: t("theme_sakura"), forest: t("theme_forest")
+  };
+  setStatus(t("theme_changed", labels[next] || next));
 }
 
 async function chooseDir() {
