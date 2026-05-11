@@ -189,6 +189,20 @@ html, body {
 .btn-small { padding: 4px 8px; font-size: 12px; }
 .btn-large { padding: 10px 22px; font-size: 14px; min-width: 120px; }
 
+.btn-danger {
+  background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+.btn-danger:hover { filter: brightness(1.1); }
+.btn-danger:disabled {
+  background: var(--bg-elev);
+  color: var(--text-muted);
+  filter: none;
+  font-weight: 400;
+}
+
 .share-info {
   background: var(--bg-elev);
   border: 1px solid var(--border);

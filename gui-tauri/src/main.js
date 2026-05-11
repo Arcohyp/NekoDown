@@ -12,6 +12,8 @@ const state = {
   progressByPath: new Map(),
   sparkData: new Map(),
   downloading: false,
+  activeDownloads: new Map(), // downloadId -> { file, li }
+  cancelled: false,
 };
 
 let i18nStrings = null; // null = not loaded yet
@@ -35,10 +37,21 @@ function fmtSpeed(bps) { return fmtSize(bps) + "/s"; }
 
 function $(id) { return document.getElementById(id); }
 
-function setStatus(text, kind) {
+function setStatus(key, kind, ...args) {
+  const el = $("status");
+  el.textContent = t(key, ...args);
+  el.className = "status" + (kind ? " " + kind : "");
+  el.dataset.statusKey = key;
+  if (args.length) el.dataset.statusArgs = JSON.stringify(args);
+  else delete el.dataset.statusArgs;
+}
+
+function setStatusRaw(text, kind) {
   const el = $("status");
   el.textContent = text;
   el.className = "status" + (kind ? " " + kind : "");
+  delete el.dataset.statusKey;
+  delete el.dataset.statusArgs;
 }
 
 async function loadI18n() {
@@ -69,20 +82,26 @@ function updateLangBtn() {
 
 async function switchLanguage(targetLang) {
   try {
+    console.log("[switchLanguage] fetching strings for", targetLang);
     const result = await invoke("get_lang_strings", { lang: targetLang });
+    console.log("[switchLanguage] got strings, lang=", result.lang);
     i18nLang = result.lang;
     i18nStrings = result.strings || {};
     applyI18n();
     updateLangBtn();
+    console.log("[switchLanguage] fetching config...");
     const cfg = await invoke("get_config");
+    console.log("[switchLanguage] got config", cfg);
     const toSave = Object.assign({}, cfg, { language: targetLang });
     if (toSave.logEnabled === undefined) toSave.logEnabled = true;
+    console.log("[switchLanguage] saving config...");
     await invoke("save_config", { cfg: toSave });
+    console.log("[switchLanguage] done");
     return true;
   } catch (e) {
-    console.error("lang switch failed", e);
+    console.error("[switchLanguage] FAILED", e);
     const msg = typeof e === "string" ? e : (e?.message || String(e));
-    setStatus("Lang error: " + msg, "error");
+    setStatusRaw("Lang error: " + msg, "error");
     return false;
   }
 }
@@ -102,6 +121,13 @@ function applyI18n() {
   document.querySelectorAll("[data-i18n-title]").forEach(el => {
     el.title = t(el.dataset.i18nTitle);
   });
+  // Refresh status bar if it holds a translatable key.
+  const statusEl = $("status");
+  const statusKey = statusEl?.dataset.statusKey;
+  if (statusKey && i18nStrings) {
+    const args = statusEl.dataset.statusArgs ? JSON.parse(statusEl.dataset.statusArgs) : [];
+    statusEl.textContent = t(statusKey, ...args);
+  }
 }
 
 async function init() {
@@ -128,6 +154,7 @@ async function init() {
   $("select-all-btn").addEventListener("click", () => setAllChecked(true));
   $("deselect-btn").addEventListener("click", () => setAllChecked(false));
   $("download-btn").addEventListener("click", onDownload);
+  $("cancel-btn").addEventListener("click", onCancel);
   $("open-folder-btn").addEventListener("click", () => {
     if (state.outputDir) invoke("open_folder", { path: state.outputDir });
   });
@@ -148,7 +175,7 @@ async function init() {
   window.addEventListener("focus", tryAutoPaste);
   await tryAutoPaste();
 
-  setStatus(t("ready"));
+  setStatus("ready");
 }
 
 const THEMES = ["neko", "moonlight", "sakura", "forest"];
@@ -161,7 +188,7 @@ function cycleTheme() {
     neko: t("theme_neko"), moonlight: t("theme_moonlight"),
     sakura: t("theme_sakura"), forest: t("theme_forest")
   };
-  setStatus(t("theme_changed", labels[next] || next));
+  setStatus("theme_changed", null, labels[next] || next);
 }
 
 async function chooseDir() {
@@ -177,14 +204,14 @@ async function chooseDir() {
 
 async function onParse() {
   const link = $("link-input").value.trim();
-  if (!link) { setStatus(t("parse_error"), "error"); return; }
+  if (!link) { setStatus("parse_error", "error"); return; }
   $("parse-btn").disabled = true;
   $("download-btn").disabled = true;
-  setStatus(t("parsing"));
+  setStatus("parsing");
   try {
     const result = await invoke("parse_share", { link });
     if (!result.ok) {
-      setStatus(t("parse_failed") + (result.error || t("unknown")), "error");
+      setStatusRaw(t("parse_failed") + (result.error || t("unknown")), "error");
       return;
     }
     state.shareId = result.shareId;
@@ -209,10 +236,10 @@ async function onParse() {
     }
 
     renderFiles();
-    setStatus(t("parse_success", state.files.length), "success");
+    setStatus("parse_success", "success", state.files.length);
     $("download-btn").disabled = state.files.length === 0;
   } catch (e) {
-    setStatus(t("parse_failed") + (e?.message || e), "error");
+    setStatusRaw(t("parse_failed") + (e?.message || e), "error");
     console.error(e);
   } finally {
     $("parse-btn").disabled = false;
@@ -254,18 +281,101 @@ function getSelectedFiles() {
   return out;
 }
 
+async function startSingleDownload(file) {
+  const li = state.progressByPath.get(file.path);
+  if (!li) return { success: false, error: "no UI row" };
+  li.querySelector(".progress-status").textContent = t("downloading");
+
+  try {
+    const downloadId = await invoke("start_download", {
+      file,
+      domain: state.domain,
+      outputDir: state.outputDir,
+      connections: state.defaultConnections,
+    });
+
+    state.activeDownloads.set(downloadId, { file, li });
+
+    // Wait for the backend to emit download-finished for this id.
+    const result = await new Promise((resolve) => {
+      let timeoutId;
+      let unlistenFn = null;
+
+      const setup = async () => {
+        unlistenFn = await listen("download-finished", (e) => {
+          const payload = e.payload;
+          if (payload && payload.downloadId === downloadId) {
+            if (timeoutId) clearTimeout(timeoutId);
+            if (unlistenFn) unlistenFn();
+            resolve(payload);
+          }
+        });
+      };
+      setup();
+
+      // Safety timeout: if the event never arrives, resolve after 5 minutes.
+      timeoutId = setTimeout(() => {
+        if (unlistenFn) unlistenFn();
+        resolve({ success: false, error: "timeout waiting for download-finished" });
+      }, 5 * 60 * 1000);
+    });
+
+    state.activeDownloads.delete(downloadId);
+
+    if (state.cancelled) {
+      const status = li.querySelector(".progress-status");
+      status.className = "progress-status failed";
+      status.textContent = t("cancelled_status");
+      return { success: false, cancelled: true };
+    }
+
+    if (result.success) {
+      const status = li.querySelector(".progress-status");
+      status.className = "progress-status done";
+      status.textContent = t("completed_status");
+      li.querySelector(".progress-bar-fill").style.width = "100%";
+      return { success: true };
+    } else {
+      const status = li.querySelector(".progress-status");
+      status.className = "progress-status failed";
+      status.textContent = t("failed_status");
+      console.error("download failed", file.path, result);
+      return { success: false, error: result.error || `exit code ${result.code}` };
+    }
+  } catch (e) {
+    const status = li.querySelector(".progress-status");
+    status.className = "progress-status failed";
+    status.textContent = t("failed_status");
+    console.error("download failed", file.path, e);
+    return { success: false, error: e };
+  }
+}
+
+async function onCancel() {
+  if (!state.downloading) return;
+  state.cancelled = true;
+  $("cancel-btn").disabled = true;
+  const ids = Array.from(state.activeDownloads.keys());
+  await Promise.all(ids.map((id) => invoke("cancel_download", { id }).catch(() => {})));
+  $("cancel-btn").disabled = false;
+}
+
 async function onDownload() {
   const selected = getSelectedFiles();
-  if (selected.length === 0) { setStatus(t("no_selected"), "error"); return; }
+  if (selected.length === 0) { setStatus("no_selected", "error"); return; }
   state.downloading = true;
-  $("download-btn").disabled = true;
+  state.cancelled = false;
+  $("download-btn").classList.add("hidden");
+  $("cancel-btn").classList.remove("hidden");
+  $("cancel-btn").disabled = false;
   $("parse-btn").disabled = true;
-  setStatus(t("downloading") + ` (${selected.length})…`);
+  setStatus("downloading_count", null, selected.length);
 
   const progressList = $("progress-list");
   progressList.innerHTML = "";
   state.progressByPath.clear();
   state.sparkData.clear();
+  state.activeDownloads.clear();
   selected.forEach((f) => {
     const id = f.path;
     const li = document.createElement("li");
@@ -287,34 +397,21 @@ async function onDownload() {
   });
   $("progress-empty").classList.add("hidden");
 
+  const results = await Promise.allSettled(selected.map((f) => startSingleDownload(f)));
   let success = 0, failed = 0;
-  for (const f of selected) {
-    const li = state.progressByPath.get(f.path);
-    li.querySelector(".progress-status").textContent = t("downloading");
-    try {
-      await invoke("start_download", {
-        file: f,
-        domain: state.domain,
-        outputDir: state.outputDir,
-        connections: state.defaultConnections,
-      });
-      const status = li.querySelector(".progress-status");
-      status.className = "progress-status done";
-      status.textContent = t("completed_status");
-      li.querySelector(".progress-bar-fill").style.width = "100%";
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value.success) {
       success++;
-    } catch (e) {
-      const status = li.querySelector(".progress-status");
-      status.className = "progress-status failed";
-      status.textContent = t("failed_status");
-      console.error("download failed", f.path, e);
+    } else {
       failed++;
     }
   }
+
   state.downloading = false;
-  $("download-btn").disabled = false;
+  $("download-btn").classList.remove("hidden");
+  $("cancel-btn").classList.add("hidden");
   $("parse-btn").disabled = false;
-  setStatus(t("completed", success, failed), failed ? "error" : "success");
+  setStatus("completed", failed ? "error" : "success", success, failed);
 }
 
 function onDownloadEvent(payload) {
@@ -393,7 +490,7 @@ async function tryAutoPaste() {
     const text = await readText();
     if (!text || !looksLikeLink(text)) return;
     input.value = text.trim();
-    setStatus(t("auto_paste_ok"), "success");
+    setStatus("auto_paste_ok", "success");
   } catch (e) { /* ignore */ }
 }
 

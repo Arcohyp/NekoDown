@@ -1,5 +1,5 @@
 ﻿{
-    "defaultOutputDir":  "C:\\CloudreveDownloader\\downloads",
+    "defaultOutputDir":  "C:\\GreenPrivate\\NekoDown\\downloads",
     "defaultConnections":  16,
     "autoRetry":  true,
     "maxRetries":  3,
