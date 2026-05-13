@@ -1,24 +1,123 @@
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::{
     atomic::{AtomicU32, Ordering},
-    Arc, Mutex, OnceLock,
+    Arc, OnceLock,
 };
+use parking_lot::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+
+// ==================== Embedded Resources ====================
+// PowerShell scripts and language pack are compiled into the binary so that
+// the GUI can run from a single exe without any side-car files.
+//
+// Green-first strategy: try to extract next to the exe (portable / USB mode).
+// If the exe directory is read-only (e.g. Program Files), fall back to
+// %LOCALAPPDATA%\NekoDown.
+
+const CORE_PS1:      &str = include_str!("../../../lib/core.ps1");
+const I18N_PS1:      &str = include_str!("../../../lib/i18n.ps1");
+const LOG_PS1:       &str = include_str!("../../../lib/log.ps1");
+const BRIDGE_PS1:    &str = include_str!("../../../lib/tauri-bridge.ps1");
+const LANG_JSON:     &str = include_str!("../../../lang.json");
+
+fn get_local_app_data_dir() -> anyhow::Result<PathBuf> {
+    let local = std::env::var("LOCALAPPDATA")
+        .map_err(|_| anyhow::anyhow!("无法获取 LOCALAPPDATA 环境变量"))?;
+    Ok(PathBuf::from(local).join("NekoDown"))
+}
+
+/// Write all embedded resources into `root`.
+fn extract_resources_to(root: &std::path::Path) -> anyhow::Result<()> {
+    let lib_dir = root.join("lib");
+
+    let scripts = [
+        ("core.ps1", CORE_PS1),
+        ("i18n.ps1", I18N_PS1),
+        ("log.ps1", LOG_PS1),
+        ("tauri-bridge.ps1", BRIDGE_PS1),
+    ];
+
+    for (name, content) in scripts {
+        let path = lib_dir.join(name);
+        let needs_write = if path.exists() {
+            let existing = std::fs::read_to_string(&path).unwrap_or_default();
+            existing != content
+        } else {
+            true
+        };
+        if needs_write {
+            std::fs::create_dir_all(&lib_dir)?;
+            std::fs::write(&path, content)?;
+        }
+    }
+
+    // lang.json
+    let lang_path = root.join("lang.json");
+    let needs_write = if lang_path.exists() {
+        let existing = std::fs::read_to_string(&lang_path).unwrap_or_default();
+        let existing_clean = if existing.starts_with('\u{feff}') {
+            existing[3..].to_string()
+        } else {
+            existing
+        };
+        existing_clean != LANG_JSON
+    } else {
+        true
+    };
+    if needs_write {
+        std::fs::write(&lang_path, LANG_JSON)?;
+    }
+
+    Ok(())
+}
+
+/// Try to write a test file next to the exe to see if the directory is writable.
+fn is_dir_writable(path: &std::path::Path) -> bool {
+    let probe = path.join("._nekodown_writable_test");
+    match std::fs::write(&probe, b"1") {
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+/// Extract embedded scripts/lang.json so the app can run standalone.
+///
+/// Priority:
+///   1. Next to the exe if the directory is writable (green / portable mode).
+///   2. %LOCALAPPDATA%\NekoDown (fallback for read-only installs).
+fn ensure_resources_extracted() -> anyhow::Result<PathBuf> {
+    // Try green mode first.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            if is_dir_writable(exe_dir) {
+                extract_resources_to(exe_dir)?;
+                return Ok(exe_dir.to_path_buf());
+            }
+        }
+    }
+
+    // Fallback to LOCALAPPDATA.
+    let app_dir = get_local_app_data_dir()?;
+    extract_resources_to(&app_dir)?;
+    Ok(app_dir)
+}
 
 fn find_project_root() -> anyhow::Result<PathBuf> {
     // Walk upward from the running exe and the current working directory
     // looking for `lib/core.ps1`.
-    // Covers three layouts:
+    // Covers four layouts:
     //   1. Dev / portable / NSIS side-by-side:  exe 旁边直接有 lib/
     //   2. Tauri bundled resources/:             exe 旁边有 resources/lib/
     //   3. Source checkout:                      exe 在 gui-tauri/src-tauri/target/
     //                                             向上走到项目根目录
+    //   4. Single-exe fallback:                  resources extracted to %LOCALAPPDATA%\NekoDown
     let mut starts: Vec<PathBuf> = Vec::new();
     if let Ok(p) = std::env::current_exe() {
         if let Some(d) = p.parent() { starts.push(d.to_path_buf()); }
@@ -36,6 +135,12 @@ fn find_project_root() -> anyhow::Result<PathBuf> {
                 return Ok(cur.join("resources"));
             }
             if !cur.pop() { break; }
+        }
+    }
+    // Layout 4: fallback to extracted resources in LOCALAPPDATA
+    if let Ok(app_dir) = get_local_app_data_dir() {
+        if app_dir.join("lib").join("core.ps1").exists() {
+            return Ok(app_dir);
         }
     }
     Err(anyhow::anyhow!(
@@ -61,6 +166,7 @@ fn bridge_path() -> Result<PathBuf, String> {
 struct DownloadManager {
     next_id: AtomicU32,
     processes: Mutex<HashMap<u32, std::process::Child>>,
+    finished_ids: Mutex<HashSet<u32>>,
 }
 
 impl DownloadManager {
@@ -68,21 +174,22 @@ impl DownloadManager {
         Arc::new(Self {
             next_id: AtomicU32::new(1),
             processes: Mutex::new(HashMap::new()),
+            finished_ids: Mutex::new(HashSet::new()),
         })
     }
 
     fn register(&self, child: std::process::Child) -> u32 {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-        self.processes.lock().unwrap().insert(id, child);
+        self.processes.lock().insert(id, child);
         id
     }
 
     fn unregister(&self, id: u32) -> Option<std::process::Child> {
-        self.processes.lock().unwrap().remove(&id)
+        self.processes.lock().remove(&id)
     }
 
     fn cancel(&self, id: u32) {
-        let Some(mut child) = self.processes.lock().unwrap().remove(&id) else {
+        let Some(mut child) = self.processes.lock().remove(&id) else {
             // Already finished or never existed — nothing to do.
             return;
         };
@@ -90,40 +197,111 @@ impl DownloadManager {
         // Spawn a thread to do the heavy lifting so we don't block the async runtime.
         std::thread::spawn(move || {
             // Kill the entire process tree (PowerShell + aria2c) via taskkill.
-            let _ = Command::new("taskkill")
-                .args(["/T", "/F", "/PID", &pid.to_string()])
-                .creation_flags(0x08000000) // CREATE_NO_WINDOW
-                .output();
+            let mut cmd = Command::new("taskkill");
+            cmd.args(["/T", "/F", "/PID", &pid.to_string()]);
+            set_no_window(&mut cmd);
+            let _ = cmd.output();
             // Reap the zombie process.
             let _ = child.wait();
         });
     }
 
     fn cancel_all(&self) {
-        let ids: Vec<u32> = self.processes.lock().unwrap().keys().cloned().collect();
+        let ids: Vec<u32> = self.processes.lock().keys().cloned().collect();
         for id in ids {
             self.cancel(id);
+        }
+    }
+
+    fn try_emit_finished(&self, id: u32, app: &AppHandle, payload: Value) {
+        let mut finished = self.finished_ids.lock();
+        if finished.insert(id) {
+            let _ = app.emit("download-finished", payload);
         }
     }
 }
 
 static MANAGER: OnceLock<Arc<DownloadManager>> = OnceLock::new();
 
+/// Prevent console window popup on Windows (CREATE_NO_WINDOW).
+#[cfg(target_os = "windows")]
+fn set_no_window(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    cmd.creation_flags(0x08000000);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn set_no_window(_cmd: &mut Command) {}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppConfig {
+    #[serde(default = "default_output_dir")]
+    default_output_dir: String,
+    #[serde(default = "default_connections")]
+    default_connections: u32,
+    #[serde(default = "default_auto_retry")]
+    auto_retry: bool,
+    #[serde(default = "default_max_retries")]
+    max_retries: u32,
+    #[serde(default = "default_log_enabled")]
+    log_enabled: bool,
+    #[serde(default = "default_check_disk_space")]
+    check_disk_space: bool,
+    #[serde(default = "default_min_free_space_gb")]
+    min_free_space_gb: u32,
+    #[serde(default)]
+    proxy: String,
+    #[serde(default = "default_language")]
+    language: String,
+}
+
+impl AppConfig {
+    fn with_root(root: &std::path::Path) -> Self {
+        Self {
+            default_output_dir: root.join("downloads").to_string_lossy().to_string(),
+            default_connections: 16,
+            auto_retry: true,
+            max_retries: 3,
+            log_enabled: true,
+            check_disk_space: true,
+            min_free_space_gb: 2,
+            proxy: String::new(),
+            language: "auto".to_string(),
+        }
+    }
+}
+
+fn default_output_dir() -> String {
+    find_project_root()
+        .map(|r| r.join("downloads").to_string_lossy().to_string())
+        .unwrap_or_else(|_| "downloads".to_string())
+}
+
+fn default_connections() -> u32 { 16 }
+fn default_auto_retry() -> bool { true }
+fn default_max_retries() -> u32 { 3 }
+fn default_log_enabled() -> bool { true }
+fn default_check_disk_space() -> bool { true }
+fn default_min_free_space_gb() -> u32 { 2 }
+fn default_language() -> String { "auto".to_string() }
+
 #[tauri::command]
 fn parse_share(link: String) -> Result<Value, String> {
     let bridge = bridge_path()?;
-    let output = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy", "Bypass",
-            "-File", bridge.to_str().ok_or("bad bridge path")?,
-            "-Action", "parse",
-            "-ShareLink", &link,
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
+    let mut cmd = Command::new("powershell");
+    cmd.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy", "Bypass",
+        "-File", bridge.to_str().ok_or("bad bridge path")?,
+        "-Action", "parse",
+        "-ShareLink", &link,
+    ])
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
+    set_no_window(&mut cmd);
+    let output = cmd.output()
         .map_err(|e| format!("failed to spawn powershell: {}", e))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -156,23 +334,24 @@ async fn start_download(
 
     let conn = connections.unwrap_or(0).to_string();
 
-    let mut child = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy", "Bypass",
-            "-File", bridge.to_str().ok_or("bad bridge path")?,
-            "-Action", "download",
-            "-FilePath", &path,
-            "-FileSize", &size.to_string(),
-            "-RelativePath", &rel,
-            "-Domain", &domain,
-            "-OutputDir", &output_dir,
-            "-Connections", &conn,
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+    let mut cmd = Command::new("powershell");
+    cmd.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy", "Bypass",
+        "-File", bridge.to_str().ok_or("bad bridge path")?,
+        "-Action", "download",
+        "-FilePath", &path,
+        "-FileSize", &size.to_string(),
+        "-RelativePath", &rel,
+        "-Domain", &domain,
+        "-OutputDir", &output_dir,
+        "-Connections", &conn,
+    ])
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
+    set_no_window(&mut cmd);
+    let mut child = cmd.spawn()
         .map_err(|e| format!("failed to spawn: {}", e))?;
 
     let stdout = child.stdout.take().ok_or("no stdout")?;
@@ -205,8 +384,8 @@ async fn start_download(
     let manager_clone = manager.clone();
     let app_clone = app.clone();
     std::thread::spawn(move || {
-        if let Some(mut child) = manager_clone.unregister(download_id) {
-            let payload = match child.wait() {
+        let payload = if let Some(mut child) = manager_clone.unregister(download_id) {
+            match child.wait() {
                 Ok(status) if status.success() => {
                     serde_json::json!({ "downloadId": download_id, "success": true })
                 }
@@ -216,9 +395,11 @@ async fn start_download(
                 Err(e) => {
                     serde_json::json!({ "downloadId": download_id, "success": false, "error": e.to_string() })
                 }
-            };
-            let _ = app_clone.emit("download-finished", payload);
-        }
+            }
+        } else {
+            serde_json::json!({ "downloadId": download_id, "success": false, "cancelled": true })
+        };
+        manager_clone.try_emit_finished(download_id, &app_clone, payload);
     });
 
     Ok(id)
@@ -230,8 +411,9 @@ async fn cancel_download(app: AppHandle, id: u32) -> Result<(), String> {
     manager.cancel(id);
     // Emit a finished event so the frontend always resolves its wait-loop,
     // even if the background wait-thread already unregistered the child.
-    let _ = app.emit(
-        "download-finished",
+    manager.try_emit_finished(
+        id,
+        &app,
         serde_json::json!({ "downloadId": id, "success": false, "cancelled": true }),
     );
     Ok(())
@@ -262,8 +444,9 @@ fn get_config() -> Result<Value, String> {
     let cfg_path = root.join("config.json");
     eprintln!("[get_config] path={:?}", cfg_path);
     if !cfg_path.exists() {
-        eprintln!("[get_config] file not found, returning empty object");
-        return Ok(serde_json::json!({}));
+        eprintln!("[get_config] file not found, returning default config");
+        let cfg = AppConfig::with_root(&root);
+        return serde_json::to_value(&cfg).map_err(|e| e.to_string());
     }
     let mut raw = std::fs::read_to_string(&cfg_path).map_err(|e| e.to_string())?;
     // Strip UTF-8 BOM if present so serde_json doesn't choke.
@@ -272,19 +455,24 @@ fn get_config() -> Result<Value, String> {
     }
     eprintln!("[get_config] read {} bytes", raw.len());
     if raw.trim().is_empty() {
-        eprintln!("[get_config] file empty, returning empty object");
-        return Ok(serde_json::json!({}));
+        eprintln!("[get_config] file empty, returning default config");
+        let cfg = AppConfig::with_root(&root);
+        return serde_json::to_value(&cfg).map_err(|e| e.to_string());
     }
-    serde_json::from_str::<Value>(&raw).map_err(|e| {
+    let cfg: AppConfig = serde_json::from_str(&raw).map_err(|e| {
         eprintln!("[get_config] JSON parse error: {}", e);
-        e.to_string()
-    })
+        format!("配置格式无效: {}", e)
+    })?;
+    serde_json::to_value(&cfg).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn save_config(cfg: Value) -> Result<(), String> {
     let root = find_project_root().map_err(|e| e.to_string())?;
     let cfg_path = root.join("config.json");
+    // Validate against schema before writing.
+    let _validated: AppConfig = serde_json::from_value(cfg.clone())
+        .map_err(|e| format!("配置格式无效: {}", e))?;
     let pretty = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?;
     std::fs::write(&cfg_path, pretty).map_err(|e| e.to_string())?;
     Ok(())
@@ -361,8 +549,15 @@ fn get_lang_strings(lang: String) -> Result<Value, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Ensure embedded scripts are available on disk (single-exe mode).
+    if let Err(e) = ensure_resources_extracted() {
+        eprintln!("[warn] 无法释放内置资源到 APPDATA: {}", e);
+    }
+
     let manager = DownloadManager::new();
-    MANAGER.set(manager.clone()).expect("failed to initialize download manager");
+    if MANAGER.set(manager.clone()).is_err() {
+        eprintln!("[warn] download manager already initialized");
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())

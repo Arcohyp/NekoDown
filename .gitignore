@@ -27,3 +27,5 @@ Thumbs.db
 
 # User config (optional - if you want users to create their own)
 # config.json
+# Development planning docs
+PLAN.md

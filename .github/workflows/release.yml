@@ -38,12 +38,17 @@ jobs:
 
             Cloudreve share downloader optimised for the NekoGAL community.
 
-            ### Downloads
+            ### Quick Start (Recommended)
 
-            - `NekoDown_*_x64-setup.exe` — NSIS installer (recommended)
-            - `NekoDown_*_x64-portable.zip` — portable zip (extract and run nekodown-gui.exe)
+            **Option A — Install:** Download **`NekoDown_*_x64-setup.exe`**, double-click to install, launch from Start Menu.
 
-            See README for usage.
+            **Option B — Single-file:** Download **`nekodown-gui.exe`** directly, put it anywhere (Desktop, USB drive, etc.), double-click to run. All required files are released automatically on first launch.
+
+            ### For CLI Users
+
+            - **`NekoDown_*_x64-portable.zip`** — Contains `neko-down.ps1` + `lib/` + `lang.json`. Green, no installation required.
+
+            See README for detailed usage.
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: false
@@ -54,19 +59,36 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $zipName = "NekoDown_${tag}_x64-portable.zip"
           $tmp = New-Item -ItemType Directory -Path "portable-tmp"
-          # Copy exe
+          # GUI binary
           Copy-Item "gui-tauri/src-tauri/target/release/nekodown-gui.exe" "$tmp/nekodown-gui.exe"
-          # Copy resources
-          Copy-Item -Recurse "lib" "$tmp/lib"
+          # PowerShell scripts (only .ps1 files; exclude any stale DLLs)
+          $libTmp = New-Item -ItemType Directory -Path "$tmp/lib"
+          Get-ChildItem -Path "lib" -Filter "*.ps1" | Copy-Item -Destination $libTmp
+          # Language pack
           Copy-Item "lang.json" "$tmp/lang.json"
-          Copy-Item "config.json" "$tmp/config.json"
+          # CLI entry and launcher
           Copy-Item "neko-down.ps1" "$tmp/neko-down.ps1"
           Copy-Item "双击运行.cmd" "$tmp/双击运行.cmd"
           Copy-Item "README.md" "$tmp/README.md"
+          # config.json is intentionally omitted — the app generates defaults on first run.
           # Create zip
           Compress-Archive -Path "$tmp/*" -DestinationPath $zipName
           Remove-Item -Recurse -Force $tmp
           Write-Host "Created $zipName"
+
+      - name: Upload single-file exe
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $exe = "gui-tauri/src-tauri/target/release/nekodown-gui.exe"
+          if (Test-Path $exe) {
+            gh release upload $tag $exe --repo Arcohyp/NekoDown --clobber
+          } else {
+            Write-Host "nekodown-gui.exe not found at $exe"
+            exit 1
+          }
 
       - name: Upload portable zip
         shell: pwsh

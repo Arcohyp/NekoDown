@@ -10,7 +10,9 @@
 
 ## ✨ 特性
 
-- 🪟 **原生 GUI**（Tauri + WebView2）：暗色主题、4 套配色（粉桃/月夜/樱花/森林）、单文件 .exe 仅约 5 MB
+- 🪟 **原生 GUI**（Tauri + WebView2）：暗色主题、4 套配色（粉桃/月夜/樱花/森林），单文件 .exe 仅约 5 MB
+- 📦 **单文件运行**：`nekodown-gui.exe` 内置全部脚本与语言包，首次启动自动释放，无需携带 `lib/` 文件夹
+- 🌿 **绿色优先**：释放位置跟随 exe 所在目录（桌面、U盘均可）；若目录只读则自动 fallback 到 `%LOCALAPPDATA%`
 - ⌨️ **命令行版本**（PowerShell）：纯 ps1 脚本，绿色便携，零依赖
 - 🚀 **多线程加速**：aria2 多连接下载，可配置 1-64 线程
 - 📦 **自动安装 aria2**：首次运行自动下载到 `tools/aria2/`，无需手动配置
@@ -28,8 +30,8 @@
 | 文件 | 用途 |
 |---|---|
 | `NekoDown_x.y.z_x64-setup.exe` | **NSIS 安装器**（推荐），自动创建开始菜单快捷方式与卸载入口 |
-| `nekodown-gui.exe` | **GUI 便携版**，单文件，解压到任意位置双击运行 |
-| 源码 zip | 含 CLI（`neko-down.ps1`）和 lib，命令行用户可直接使用 |
+| `nekodown-gui.exe` | **单文件 GUI**，下载到任意位置双击运行，首次启动自动释放所需文件 |
+| `NekoDown_x.y.z_x64-portable.zip` | **完整便携包**，含 CLI 工具（`neko-down.ps1` + `lib/`），绿色免安装 |
 
 ---
 
@@ -37,10 +39,12 @@
 
 ### GUI 用户
 
-1. 双击 `NekoDown_x.y.z_x64-setup.exe` 安装，或解压便携版到任意目录
+1. 双击 `NekoDown_x.y.z_x64-setup.exe` 安装，或直接把 `nekodown-gui.exe` 放到任意目录
 2. 启动 NekoDown，把 Cloudreve 分享链接粘贴到顶部输入框
 3. 点 **Parse**，文件列表加载完后点 **开始下载**
 4. 右上角 🎨 按钮切换主题
+
+> 即使只复制了单个 `nekodown-gui.exe`，首次启动也会自动释放所需的 `lib/` 脚本和 `lang.json`（优先放在 exe 旁边，若不可写则放到 `%LOCALAPPDATA%\NekoDown`）。
 
 支持的链接格式：
 
@@ -116,7 +120,7 @@ NekoDown/
 └── 双击运行.cmd              CLI 启动器
 ```
 
-GUI 采用 Tauri 架构：Rust 后端是 GUI 壳子和进程编排，下载实际由 PowerShell 端复用 `lib/` 完成。前端通过 `invoke()` 调 Rust 命令，进度通过 Tauri event 实时回流到 ProgressBar。
+GUI 采用 Tauri 架构：Rust 后端负责 GUI 壳子、进程编排和资源分发；下载实际由 PowerShell 端复用 `lib/` 完成。Rust 侧在编译时将 `lib/*.ps1` 与 `lang.json` 通过 `include_str!` 嵌入二进制，首次启动自动释放到磁盘（绿色优先，目录不可写时 fallback 到 `%LOCALAPPDATA%`）。前端通过 `invoke()` 调 Rust 命令，进度通过 Tauri event 实时回流到 ProgressBar。
 
 ---
 
@@ -179,6 +183,8 @@ NekoGAL 的 R2 存储有时对单一 IP 限速；脚本已配置浏览器级请�
 ### v3.3.0 (2026-05)
 
 - 🎉 全新 GUI（Tauri + WebView2），单文件 .exe，4 主题切换
+- 📦 **资源嵌入**：`lib/*.ps1` 与 `lang.json` 编译进二进制，exe 单独运行即可自动释放
+- 🌿 **绿色优先**：脚本优先释放到 exe 旁；U盘/桌面即插即用，目录只读时自动 fallback 到 `%LOCALAPPDATA%`
 - 🏗️ 重构：抽出 `lib/`，CLI 与 GUI 共用同一份下载核心
 - 📦 NSIS 安装器自动构建（GitHub Actions）
 - 🌐 `lang.json` 升级为中英完整字典
