@@ -180,6 +180,13 @@ NekoGAL 的 R2 存储有时对单一 IP 限速；脚本已配置浏览器级请�
 
 详见 [GitHub Releases](https://github.com/Arcohyp/NekoDown/releases)。
 
+### v3.3.1 (2026-05)
+
+- 🎉 GUI 与 CLI 版本号统一为 3.3.1
+- 🐛 修复主题/语言切换时状态栏中英文混排
+- 🔄 动态版本号：从 Cargo.toml 自动读取
+- 🔧 清理废弃的 wip/single-exe-robustness 分支
+
 ### v3.3.0 (2026-05)
 
 - 🎉 全新 GUI（Tauri + WebView2），单文件 .exe，4 主题切换
