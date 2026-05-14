@@ -126,7 +126,13 @@ function applyI18n() {
   const statusKey = statusEl?.dataset.statusKey;
   if (statusKey && i18nStrings) {
     const args = statusEl.dataset.statusArgs ? JSON.parse(statusEl.dataset.statusArgs) : [];
-    statusEl.textContent = t(statusKey, ...args);
+    if (statusKey === "theme_changed") {
+      const themeKey = args[0];
+      const label = t(`theme_${themeKey}`) || themeKey;
+      statusEl.textContent = t(statusKey, label);
+    } else {
+      statusEl.textContent = t(statusKey, ...args);
+    }
   }
 }
 
@@ -144,6 +150,14 @@ async function init() {
   } catch (e) {
     console.error("get_default_output_dir failed", e);
     $("output-dir").textContent = t("not_configured");
+  }
+
+  try {
+    const ver = await invoke("get_version");
+    const tag = $("brand-version");
+    if (tag) tag.textContent = "v" + ver;
+  } catch (e) {
+    console.error("get_version failed", e);
   }
 
   $("parse-btn").addEventListener("click", onParse);
@@ -184,11 +198,7 @@ function cycleTheme() {
   const next = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
   document.body.dataset.theme = next;
   localStorage.setItem("nekodown.theme", next);
-  const labels = {
-    neko: t("theme_neko"), moonlight: t("theme_moonlight"),
-    sakura: t("theme_sakura"), forest: t("theme_forest")
-  };
-  setStatus("theme_changed", null, labels[next] || next);
+  setStatus("theme_changed", null, next);
 }
 
 async function chooseDir() {

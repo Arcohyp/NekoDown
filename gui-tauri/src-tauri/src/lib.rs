@@ -519,6 +519,11 @@ fn resolve_language(lang: &str) -> String {
 }
 
 #[tauri::command]
+fn get_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
 fn get_lang_strings(lang: String) -> Result<Value, String> {
     let root = find_project_root().map_err(|e| e.to_string())?;
     let lang_path = root.join("lang.json");
@@ -572,6 +577,7 @@ pub fn run() {
             get_config,
             save_config,
             get_lang_strings,
+            get_version,
         ])
         .setup(move |app| {
             if let Some(window) = app.get_webview_window("main") {
