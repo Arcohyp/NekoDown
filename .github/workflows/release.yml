@@ -51,7 +51,7 @@ jobs:
             See README for detailed usage.
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: false
+          includeUpdaterJson: true
 
       - name: Package portable zip
         shell: pwsh

@@ -9,6 +9,7 @@ use std::sync::{
 };
 use parking_lot::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_updater::UpdaterExt;
 
 // ==================== Embedded Resources ====================
 // PowerShell scripts and language pack are compiled into the binary so that
@@ -524,6 +525,31 @@ fn get_version() -> String {
 }
 
 #[tauri::command]
+async fn check_update(app: AppHandle) -> Result<Option<String>, String> {
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    match updater.check().await {
+        Ok(Some(update)) => Ok(Some(update.version.clone())),
+        Ok(None) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+async fn install_update(app: AppHandle) -> Result<(), String> {
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    match updater.check().await {
+        Ok(Some(update)) => {
+            update
+                .download_and_install(|_chunk, _total| {}, || {})
+                .await
+                .map_err(|e| e.to_string())
+        }
+        Ok(None) => Err("no_update_available".to_string()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
 fn get_lang_strings(lang: String) -> Result<Value, String> {
     let root = find_project_root().map_err(|e| e.to_string())?;
     let lang_path = root.join("lang.json");
@@ -568,6 +594,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             parse_share,
             start_download,
@@ -578,6 +605,8 @@ pub fn run() {
             save_config,
             get_lang_strings,
             get_version,
+            check_update,
+            install_update,
         ])
         .setup(move |app| {
             if let Some(window) = app.get_webview_window("main") {

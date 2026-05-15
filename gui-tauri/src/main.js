@@ -189,7 +189,38 @@ async function init() {
   window.addEventListener("focus", tryAutoPaste);
   await tryAutoPaste();
 
+  // Delayed update check (don't block init, don't nag immediately).
+  setTimeout(() => checkForUpdate(), 8000);
+
   setStatus("ready");
+}
+
+/* ===== Auto-updater ===== */
+async function checkForUpdate() {
+  try {
+    const latest = await invoke("check_update");
+    if (latest) {
+      const banner = $("update-banner");
+      const versionSpan = $("update-version");
+      versionSpan.textContent = latest;
+      banner.classList.remove("hidden");
+
+      $("update-now-btn").onclick = async () => {
+        setStatus("updating", null);
+        try {
+          await invoke("install_update");
+        } catch (e) {
+          console.error("install_update failed", e);
+          setStatus("update_failed", "error");
+        }
+      };
+      $("update-later-btn").onclick = () => {
+        $("update-banner").classList.add("hidden");
+      };
+    }
+  } catch (e) {
+    console.error("check_update failed", e);
+  }
 }
 
 const THEMES = ["neko", "moonlight", "sakura", "forest"];
