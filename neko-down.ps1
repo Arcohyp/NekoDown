@@ -33,7 +33,7 @@ param(
     [int]$Aria2Connections = 0
 )
 
-$script:Version = "3.3.1"
+$script:Version = "3.3.2"
 $script:BaseDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 if (-not $script:BaseDir) { $script:BaseDir = (Get-Location).Path }
 $script:ConfigPath = Join-Path $script:BaseDir "config.json"

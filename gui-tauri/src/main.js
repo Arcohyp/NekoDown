@@ -308,26 +308,18 @@ async function startSingleDownload(file) {
 
     // Wait for the backend to emit download-finished for this id.
     const result = await new Promise((resolve) => {
-      let timeoutId;
       let unlistenFn = null;
 
       const setup = async () => {
         unlistenFn = await listen("download-finished", (e) => {
           const payload = e.payload;
           if (payload && payload.downloadId === downloadId) {
-            if (timeoutId) clearTimeout(timeoutId);
             if (unlistenFn) unlistenFn();
             resolve(payload);
           }
         });
       };
       setup();
-
-      // Safety timeout: if the event never arrives, resolve after 5 minutes.
-      timeoutId = setTimeout(() => {
-        if (unlistenFn) unlistenFn();
-        resolve({ success: false, error: "timeout waiting for download-finished" });
-      }, 5 * 60 * 1000);
     });
 
     state.activeDownloads.delete(downloadId);

@@ -1,6 +1,6 @@
 [package]
 name = "nekodown-gui"
-version = "3.3.1"
+version = "3.3.2"
 description = "NekoDown GUI - Cloudreve share downloader optimised for NekoGAL"
 authors = ["NekoDown contributors"]
 edition = "2021"

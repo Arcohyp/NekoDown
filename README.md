@@ -180,10 +180,14 @@ NekoGAL 的 R2 存储有时对单一 IP 限速；脚本已配置浏览器级请�
 
 详见 [GitHub Releases](https://github.com/Arcohyp/NekoDown/releases)。
 
+### v3.3.2 (2026-05-15)
+
+- 🐛 **修复大文件下载误报失败**：移除前端 5 分钟硬编码超时，大文件下载不再被提前判定为失败
+- 🐛 修复主题/语言切换时状态栏中英文混排
+
 ### v3.3.1 (2026-05)
 
 - 🎉 GUI 与 CLI 版本号统一为 3.3.1
-- 🐛 修复主题/语言切换时状态栏中英文混排
 - 🔄 动态版本号：从 Cargo.toml 自动读取
 - 🔧 清理废弃的 wip/single-exe-robustness 分支
 

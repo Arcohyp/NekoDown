@@ -2156,7 +2156,7 @@ dependencies = [
 
 [[package]]
 name = "nekodown-gui"
-version = "0.2.0"
+version = "3.3.1"
 dependencies = [
  "anyhow",
  "parking_lot",
