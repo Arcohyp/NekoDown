@@ -98,7 +98,7 @@ https://pan.xxx.com/s/xxxxx        (任何 Cloudreve v4 实例)
 | `proxy` | HTTP 代理 | `""` |
 | `language` | `auto` / `zh-CN` / `en-US` | `auto` |
 
-GUI 内的设置面板（开发中）会以图形化形式同步这份配置。
+GUI 内的设置面板会以图形化形式同步这份配置。
 
 ---
 
