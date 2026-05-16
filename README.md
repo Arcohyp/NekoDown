@@ -180,6 +180,12 @@ NekoGAL 的 R2 存储有时对单一 IP 限速；脚本已配置浏览器级请�
 
 详见 [GitHub Releases](https://github.com/Arcohyp/NekoDown/releases)。
 
+### v3.3.4 (2026-05-16)
+
+- 🐛 **修复下载进度卡住**：PowerShell 进度轮询中的空 catch 改为记录错误，不再静默吞掉异常导致 UI 进度不刷新
+- 🐛 **修复 Rust 管道读取线程静默退出**：stdout/stderr 读取从 `map_while(Result::ok)` 改为显式错误处理
+- 🌐 **补全 i18n**：动态创建的进度状态元素加上 `data-i18n` 属性，切换语言时状态文字（下载中/已完成/失败）正确跟随
+
 ### v3.3.3 (2026-05-15)
 
 - 🔄 **自动更新**：启动后自动检测 GitHub Releases 新版本，一键下载安装
