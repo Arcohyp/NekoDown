@@ -506,7 +506,9 @@ function Start-FileDownload {
                         }
                     }
                 }
-            } catch {}
+            } catch {
+                Write-Err "Progress monitoring error: $_"
+            }
         }
         Start-Sleep -Milliseconds 500
     }

@@ -325,7 +325,9 @@ function getSelectedFiles() {
 async function startSingleDownload(file) {
   const li = state.progressByPath.get(file.path);
   if (!li) return { success: false, error: "no UI row" };
-  li.querySelector(".progress-status").textContent = t("downloading");
+  const ps = li.querySelector(".progress-status");
+  ps.textContent = t("downloading");
+  ps.dataset.i18n = "downloading";
 
   try {
     const downloadId = await invoke("start_download", {
@@ -359,6 +361,7 @@ async function startSingleDownload(file) {
       const status = li.querySelector(".progress-status");
       status.className = "progress-status failed";
       status.textContent = t("cancelled_status");
+      status.dataset.i18n = "cancelled_status";
       return { success: false, cancelled: true };
     }
 
@@ -366,12 +369,14 @@ async function startSingleDownload(file) {
       const status = li.querySelector(".progress-status");
       status.className = "progress-status done";
       status.textContent = t("completed_status");
+      status.dataset.i18n = "completed_status";
       li.querySelector(".progress-bar-fill").style.width = "100%";
       return { success: true };
     } else {
       const status = li.querySelector(".progress-status");
       status.className = "progress-status failed";
       status.textContent = t("failed_status");
+      status.dataset.i18n = "failed_status";
       console.error("download failed", file.path, result);
       return { success: false, error: result.error || `exit code ${result.code}` };
     }
@@ -379,6 +384,7 @@ async function startSingleDownload(file) {
     const status = li.querySelector(".progress-status");
     status.className = "progress-status failed";
     status.textContent = t("failed_status");
+    status.dataset.i18n = "failed_status";
     console.error("download failed", file.path, e);
     return { success: false, error: e };
   }
@@ -419,7 +425,7 @@ async function onDownload() {
       <div class="row-top">
         <span class="progress-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
         <span class="progress-meta">${fmtSize(f.size)}</span>
-        <span class="progress-status running">${t("queued")}</span>
+        <span class="progress-status running" data-i18n="queued">${t("queued")}</span>
         <canvas class="spark" width="64" height="18"></canvas>
       </div>
       <div class="progress-bar"><div class="progress-bar-fill"></div></div>

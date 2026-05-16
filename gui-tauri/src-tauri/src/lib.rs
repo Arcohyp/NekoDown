@@ -362,18 +362,35 @@ async fn start_download(
 
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        for line in reader.lines().map_while(Result::ok) {
-            if line.trim().is_empty() { continue; }
-            if let Ok(json) = serde_json::from_str::<Value>(&line) {
-                let _ = app_out.emit("download-event", json);
+        for line in reader.lines() {
+            match line {
+                Ok(line) => {
+                    if !line.trim().is_empty() {
+                        if let Ok(json) = serde_json::from_str::<Value>(&line) {
+                            let _ = app_out.emit("download-event", json);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[stdout] reader error (progress events may stall): {}", e);
+                    break;
+                }
             }
         }
     });
     std::thread::spawn(move || {
         let reader = BufReader::new(stderr);
-        for line in reader.lines().map_while(Result::ok) {
-            if !line.trim().is_empty() {
-                let _ = app_err.emit("download-log", serde_json::json!({"line": line}));
+        for line in reader.lines() {
+            match line {
+                Ok(line) => {
+                    if !line.trim().is_empty() {
+                        let _ = app_err.emit("download-log", serde_json::json!({"line": line}));
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[stderr] reader error: {}", e);
+                    break;
+                }
             }
         }
     });
