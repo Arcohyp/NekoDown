@@ -14,6 +14,7 @@ const state = {
   downloading: false,
   activeDownloads: new Map(), // downloadId -> { file, li }
   cancelled: false,
+  cancelling: new Set(), // file paths pending cancellation
 };
 
 let i18nStrings = null; // null = not loaded yet
@@ -145,7 +146,14 @@ async function init() {
   updateLangBtn();
 
   try {
-    state.outputDir = await invoke("get_default_output_dir");
+    // Restore last-used output dir: localStorage > config.json > hardcoded default
+    const savedDir = localStorage.getItem("nekodown.outputDir");
+    if (savedDir) {
+      state.outputDir = savedDir;
+    } else {
+      const cfg = await invoke("get_config");
+      state.outputDir = cfg.defaultOutputDir || await invoke("get_default_output_dir");
+    }
     $("output-dir").textContent = state.outputDir;
   } catch (e) {
     console.error("get_default_output_dir failed", e);
@@ -161,17 +169,31 @@ async function init() {
   }
 
   $("parse-btn").addEventListener("click", onParse);
+  $("clear-link-btn").addEventListener("click", () => {
+    $("link-input").value = "";
+    $("link-input").focus();
+  });
   $("link-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") onParse();
   });
 
   $("select-all-btn").addEventListener("click", () => setAllChecked(true));
-  $("deselect-btn").addEventListener("click", () => setAllChecked(false));
+  $("deselect-btn").addEventListener("click", () => {
+    state.files = [];
+    renderFiles();
+    $("download-btn").disabled = true;
+    $("info-name").textContent = "—";
+    $("info-owner").textContent = "—";
+    $("info-views").textContent = "—";
+    $("info-downloads").textContent = "—";
+    setStatus("ready");
+  });
   $("download-btn").addEventListener("click", onDownload);
   $("cancel-btn").addEventListener("click", onCancel);
   $("open-folder-btn").addEventListener("click", () => {
     if (state.outputDir) invoke("open_folder", { path: state.outputDir });
   });
+  $("clear-progress-btn").addEventListener("click", clearCompletedProgress);
   $("choose-dir-btn").addEventListener("click", chooseDir);
   $("theme-btn").addEventListener("click", cycleTheme);
 
@@ -239,6 +261,16 @@ async function chooseDir() {
     if (picked) {
       state.outputDir = picked;
       $("output-dir").textContent = picked;
+      // Persist to localStorage for next session
+      localStorage.setItem("nekodown.outputDir", picked);
+      // Also save to config.json so CLI shares the same last-used directory
+      try {
+        const cfg = await invoke("get_config");
+        cfg.defaultOutputDir = picked;
+        await invoke("save_config", { cfg });
+      } catch (e) {
+        console.error("failed to save output dir to config", e);
+      }
     }
   } catch (e) { console.error(e); }
 }
@@ -255,9 +287,17 @@ async function onParse() {
       setStatusRaw(t("parse_failed") + (result.error || t("unknown")), "error");
       return;
     }
+
+    // Append new files with per-file domain tag (multi-share accumulate).
+    const existingPaths = new Set(state.files.map(f => f.path));
+    const newFiles = (result.files || [])
+      .filter(f => !existingPaths.has(f.path))
+      .map(f => ({ ...f, domain: result.domain }));
+    state.files.push(...newFiles);
+
+    // Update share info with latest parsed share.
     state.shareId = result.shareId;
     state.domain  = result.domain;
-    state.files   = result.files || [];
     if (result.defaultOutputDir && !state.outputDir) {
       state.outputDir = result.defaultOutputDir;
       $("output-dir").textContent = state.outputDir;
@@ -279,6 +319,10 @@ async function onParse() {
     renderFiles();
     setStatus("parse_success", "success", state.files.length);
     $("download-btn").disabled = state.files.length === 0;
+
+    // Clear input and auto-paste the next link from clipboard.
+    $("link-input").value = "";
+    await tryAutoPaste();
   } catch (e) {
     setStatusRaw(t("parse_failed") + (e?.message || e), "error");
     console.error(e);
@@ -322,6 +366,17 @@ function getSelectedFiles() {
   return out;
 }
 
+// Build the expected output path for a file (matches PowerShell's Sanitize-FileName logic).
+function buildOutputPath(file, outputDir) {
+  const sanitize = (s) => s.replace(/[<>:"/\\|?*]/g, '_').replace(/\.{2,}/g, '_').replace(/[ .]+$/, '');
+  const parts = [outputDir];
+  if (file.relativePath) {
+    parts.push(...file.relativePath.split('/').map(sanitize));
+  }
+  parts.push(sanitize(file.name));
+  return parts.join('\\');
+}
+
 async function startSingleDownload(file) {
   const li = state.progressByPath.get(file.path);
   if (!li) return { success: false, error: "no UI row" };
@@ -332,30 +387,67 @@ async function startSingleDownload(file) {
   try {
     const downloadId = await invoke("start_download", {
       file,
-      domain: state.domain,
+      domain: file.domain || state.domain,
       outputDir: state.outputDir,
       connections: state.defaultConnections,
     });
 
     state.activeDownloads.set(downloadId, { file, li });
 
-    // Wait for the backend to emit download-finished for this id.
-    const result = await new Promise((resolve) => {
-      let unlistenFn = null;
-
-      const setup = async () => {
-        unlistenFn = await listen("download-finished", (e) => {
-          const payload = e.payload;
-          if (payload && payload.downloadId === downloadId) {
-            if (unlistenFn) unlistenFn();
-            resolve(payload);
-          }
-        });
+    // Wire up per-file cancel button.
+    li.dataset.downloadId = downloadId;
+    const cancelBtn = li.querySelector(".btn-cancel-file");
+    if (cancelBtn) {
+      cancelBtn.classList.remove("hidden");
+      cancelBtn._handler = async () => {
+        cancelBtn.disabled = true;
+        // Mark as cancelling so progress events are ignored.
+        state.cancelling.add(file.path);
+        // Immediately freeze all visual progress — zero bar, speed, sparkline.
+        const progressFill = li.querySelector(".progress-bar-fill");
+        if (progressFill) progressFill.style.width = "0%";
+        const meta = li.querySelector(".progress-meta");
+        if (meta) meta.textContent = "";
+        const sparkCanvas = li.querySelector(".spark");
+        if (sparkCanvas) {
+          const ctx = sparkCanvas.getContext("2d");
+          ctx.clearRect(0, 0, sparkCanvas.width, sparkCanvas.height);
+        }
+        state.sparkData.set(file.path, []);
+        // Show cancelling status.
+        const ps = li.querySelector(".progress-status");
+        ps.textContent = t("cancelling_status");
+        ps.className = "progress-status failed";
+        try { await invoke("cancel_download", { id: downloadId }); }
+        catch (e) { console.error("cancel file failed", e); }
       };
-      setup();
+      cancelBtn.addEventListener("click", cancelBtn._handler);
+    }
+
+    // Wait for the centralized listener (in onDownload) to resolve via activeDownloads.
+    const result = await new Promise((resolve) => {
+      const entry = state.activeDownloads.get(downloadId);
+      if (entry) entry._resolve = resolve;
     });
 
     state.activeDownloads.delete(downloadId);
+    state.cancelling.delete(file.path);
+
+    // Switch ✕ from "cancel" to "remove row" mode.
+    if (cancelBtn) {
+      if (cancelBtn._handler) cancelBtn.removeEventListener("click", cancelBtn._handler);
+      cancelBtn.disabled = false;
+      cancelBtn.title = t("remove_row");
+      cancelBtn._handler = () => {
+        const row = cancelBtn.closest(".progress-row");
+        if (!row) return;
+        const id = row.dataset.id;
+        if (id) { state.progressByPath.delete(id); state.sparkData.delete(id); }
+        row.remove();
+        if ($("progress-list").children.length === 0) $("progress-empty").classList.remove("hidden");
+      };
+      cancelBtn.addEventListener("click", cancelBtn._handler);
+    }
 
     if (state.cancelled) {
       const status = li.querySelector(".progress-status");
@@ -400,8 +492,32 @@ async function onCancel() {
 }
 
 async function onDownload() {
-  const selected = getSelectedFiles();
+  let selected = getSelectedFiles();
   if (selected.length === 0) { setStatus("no_selected", "error"); return; }
+
+  // --- Duplicate file detection (medium precision) ---
+  // Check which selected files already exist at the expected output path.
+  const paths = selected.map(f => buildOutputPath(f, state.outputDir));
+  let exists;
+  try {
+    exists = await invoke("paths_exist", { paths });
+  } catch (e) {
+    console.error("paths_exist failed, skipping duplicate check", e);
+    exists = selected.map(() => false);
+  }
+  const existingFiles = selected.filter((_, i) => exists[i]);
+  const newFiles = selected.filter((_, i) => !exists[i]);
+
+  if (existingFiles.length > 0 && newFiles.length === 0) {
+    // All selected files already exist — nothing to do.
+    setStatus("all_exist_skip", null, existingFiles.length);
+    return;
+  }
+  if (existingFiles.length > 0) {
+    setStatus("file_exists_skip", null, existingFiles.length, newFiles.length);
+  }
+  selected = newFiles;
+
   state.downloading = true;
   state.cancelled = false;
   $("download-btn").classList.add("hidden");
@@ -410,11 +526,28 @@ async function onDownload() {
   $("parse-btn").disabled = true;
   setStatus("downloading_count", null, selected.length);
 
+  // Centralized download-finished listener for this batch.
+  // Prevents per-download listener leaks that would hang the UI forever.
+  let batchUnlisten = null;
+  const setupBatchListener = async () => {
+    batchUnlisten = await listen("download-finished", (e) => {
+      const p = e.payload;
+      if (p && p.downloadId) {
+        const entry = state.activeDownloads.get(p.downloadId);
+        if (entry && entry._resolve) {
+          entry._resolve(p);
+        }
+      }
+    });
+  };
+  await setupBatchListener();
+
   const progressList = $("progress-list");
   progressList.innerHTML = "";
   state.progressByPath.clear();
   state.sparkData.clear();
   state.activeDownloads.clear();
+  state.cancelling.clear();
   selected.forEach((f) => {
     const id = f.path;
     const li = document.createElement("li");
@@ -427,6 +560,7 @@ async function onDownload() {
         <span class="progress-meta">${fmtSize(f.size)}</span>
         <span class="progress-status running" data-i18n="queued">${t("queued")}</span>
         <canvas class="spark" width="64" height="18"></canvas>
+        <button class="btn-cancel-file hidden" title="${t('cancel_file')}">✕</button>
       </div>
       <div class="progress-bar"><div class="progress-bar-fill"></div></div>
     `;
@@ -446,6 +580,9 @@ async function onDownload() {
     }
   }
 
+  // Clean up the batch-level listener so it never leaks into future downloads.
+  if (batchUnlisten) batchUnlisten();
+
   state.downloading = false;
   $("download-btn").classList.remove("hidden");
   $("cancel-btn").classList.add("hidden");
@@ -456,6 +593,8 @@ async function onDownload() {
 function onDownloadEvent(payload) {
   if (!payload || !payload.event) return;
   if (payload.event === "progress") {
+    // Ignore progress for files that have been cancelled.
+    if (state.cancelling.has(payload.filePath)) return;
     const row = state.progressByPath.get(payload.filePath);
     if (!row) return;
     const total = Number(payload.total) || 0;
@@ -515,7 +654,7 @@ function drawSparkline(canvas, data) {
 let lastPasteAttempt = 0;
 function looksLikeLink(text) {
   return /https?:\/\//.test(text) &&
-    (text.includes("nekogal.top") || /\/s\/\w+/.test(text) || text.includes("home?path=cloudreve%3A"));
+    (text.includes("nekogal.top") || /\/s\/[a-zA-Z0-9]{4,8}(\/|$|[?#])/.test(text) || text.includes("home?path=cloudreve%3A"));
 }
 async function tryAutoPaste() {
   if (!readText) return;
@@ -529,8 +668,43 @@ async function tryAutoPaste() {
     const text = await readText();
     if (!text || !looksLikeLink(text)) return;
     input.value = text.trim();
+    // Visual feedback: flash the input, then remove animation class.
+    input.classList.add("flash");
+    setTimeout(() => input.classList.remove("flash"), 1500);
     setStatus("auto_paste_ok", "success");
   } catch (e) { /* ignore */ }
+}
+
+/* ===== Clear completed progress ===== */
+function clearCompletedProgress() {
+  const list = $("progress-list");
+  const items = list.querySelectorAll(".progress-row");
+  let cleared = 0;
+  items.forEach(li => {
+    const statusEl = li.querySelector(".progress-status");
+    if (!statusEl) return;
+    const isTerminal = statusEl.classList.contains("done") || statusEl.classList.contains("failed");
+    if (!isTerminal) return;
+    const id = li.dataset.id;
+    if (id) {
+      state.progressByPath.delete(id);
+      state.sparkData.delete(id);
+      // Tidy stale entry from activeDownloads if any.
+      if (state.activeDownloads.size > 0) {
+        const stale = [...state.activeDownloads].find(([, e]) => e.file && e.file.path === id);
+        if (stale) state.activeDownloads.delete(stale[0]);
+      }
+    }
+    li.remove();
+    cleared++;
+  });
+  // Show empty placeholder if nothing left.
+  if (list.children.length === 0) {
+    $("progress-empty").classList.remove("hidden");
+  }
+  if (cleared > 0) {
+    setStatus("progress_cleared", "success", cleared);
+  }
 }
 
 /* ===== Settings modal ===== */

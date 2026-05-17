@@ -36,6 +36,7 @@
             data-i18n-placeholder="example_placeholder"
             spellcheck="false"
           />
+          <button id="clear-link-btn" class="btn btn-ghost" title="清空链接" data-i18n-title="clear_link">✕</button>
           <button id="parse-btn" class="btn btn-primary" data-i18n="parse">Parse</button>
         </div>
       </header>
@@ -68,7 +69,10 @@
         <div class="panel progress-panel">
           <div class="panel-head">
             <h2 data-i18n="download_progress">下载进度</h2>
-            <button id="open-folder-btn" class="btn btn-ghost" data-i18n-title="open_download_directory">📁</button>
+            <div class="panel-actions">
+              <button id="clear-progress-btn" class="btn btn-ghost" data-i18n="clear_completed">Clear completed</button>
+              <button id="open-folder-btn" class="btn btn-ghost" data-i18n-title="open_download_directory">📁</button>
+            </div>
           </div>
           <div class="panel-body">
             <ul id="progress-list" class="progress-list"></ul>

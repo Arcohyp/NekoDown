@@ -152,6 +152,13 @@ html, body {
 }
 
 .link-row { display: flex; gap: 8px; }
+#clear-link-btn {
+  padding: 6px 8px;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 6px;
+  align-self: center;
+}
 .link-input {
   flex: 1;
   min-width: 0;
@@ -171,6 +178,14 @@ html, body {
 .link-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(255, 126, 182, 0.15);
+}
+.link-input.flash {
+  animation: flashAccent 1.5s ease-out;
+}
+@keyframes flashAccent {
+  0%   { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 40%, transparent); }
+  50%  { border-color: var(--success); box-shadow: 0 0 0 6px color-mix(in srgb, var(--success) 30%, transparent); }
+  100% { border-color: var(--border); box-shadow: none; }
 }
 .brand-actions .btn {
   width: 32px;
@@ -356,7 +371,6 @@ html, body {
 }
 .progress-row .row-top {
   display: grid;
-  grid-template-columns: 1fr auto auto;
   gap: 8px;
   margin-bottom: 6px;
   align-items: center;
@@ -514,8 +528,33 @@ html, body {
   border-radius: 3px;
 }
 .progress-row .row-top {
-  grid-template-columns: 1fr auto auto auto;
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  gap: 8px;
+  margin-bottom: 6px;
+  align-items: center;
 }
 .progress-row canvas.spark {
   margin-left: 6px;
+}
+.btn-cancel-file {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 4px;
+  opacity: 0.5;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+.btn-cancel-file:hover {
+  opacity: 1;
+  color: var(--danger);
+  background: rgba(248, 113, 113, 0.1);
+}
+.btn-cancel-file:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
 }
