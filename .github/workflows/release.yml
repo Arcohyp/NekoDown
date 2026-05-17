@@ -24,42 +24,94 @@ jobs:
         with:
           workspaces: gui-tauri/src-tauri
 
+      - name: Install Tauri CLI (npm pre-built)
+        run: npm install -g @tauri-apps/cli@latest
+
       - name: Build Tauri release
-        id: tauri_build
-        uses: tauri-apps/tauri-action@v0
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          projectPath: ./gui-tauri
-          tagName: ${{ github.ref_name }}
-          releaseName: 'NekoDown ${{ github.ref_name }}'
-          releaseBody: |
-            ## NekoDown ${{ github.ref_name }}
+        run: npx tauri build --bundles nsis
+        working-directory: gui-tauri
 
-            Cloudreve share downloader optimised for the NekoGAL community.
-            专为 NekoGAL 优化的 Cloudreve 分享链接下载工具。
+      - name: Write release notes
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $lines = @(
+            "## NekoDown $tag",
+            "",
+            "Cloudreve share downloader optimised for the NekoGAL community.",
+            "专为 NekoGAL 优化的 Cloudreve 分享链接下载工具。",
+            "",
+            "### Quick Start / 快速开始",
+            "",
+            "**Option A — Install / 安装版:**  ",
+            "Download **`NekoDown_*_x64-setup.exe`**, double-click to install, launch from Start Menu.  ",
+            "下载安装包，双击安装，从开始菜单启动。",
+            "",
+            "**Option B — Single-file / 单文件版:**  ",
+            "Download **`nekodown-gui.exe`** directly, put it anywhere, double-click to run. All required files are released automatically on first launch.  ",
+            "直接下载 exe，放到任意位置双击运行，首次启动自动释放所需文件。",
+            "",
+            "### For CLI Users / 命令行用户",
+            "",
+            "- **`NekoDown_*_x64-portable.zip`** — Contains `neko-down.ps1` + `lib/` + `lang.json`. Green, no installation required.  ",
+            "  包含 CLI 脚本和语言包，绿色免安装。",
+            "",
+            "See [README](https://github.com/Arcohyp/NekoDown) for detailed usage.  ",
+            "详细用法请查看 README。"
+          )
+          $body = $lines -join "`r`n"
+          Set-Content -Path "$env:RUNNER_TEMP\release-body.md" -Value $body -Encoding UTF8
+          Write-Host "Release notes written"
 
-            ### Quick Start / 快速开始
+      - name: Create or update draft release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $repo = "Arcohyp/NekoDown"
+          $bodyFile = "$env:RUNNER_TEMP\release-body.md"
 
-            **Option A — Install / 安装版:**  
-            Download **`NekoDown_*_x64-setup.exe`**, double-click to install, launch from Start Menu.  
-            下载安装包，双击安装，从开始菜单启动。
+          # Check if release already exists
+          $exists = $false
+          gh release view $tag --repo $repo --json id 2>$null | Out-Null
+          if ($?) { $exists = $true }
 
-            **Option B — Single-file / 单文件版:**  
-            Download **`nekodown-gui.exe`** directly, put it anywhere, double-click to run. All required files are released automatically on first launch.  
-            直接下载 exe，放到任意位置双击运行，首次启动自动释放所需文件。
+          if (-not $exists) {
+            Write-Host "Creating new draft release..."
+            gh release create $tag --draft --title "NekoDown $tag" --notes-file $bodyFile --repo $repo
+          } else {
+            Write-Host "Updating existing draft release..."
+            gh release edit $tag --draft --notes-file $bodyFile --repo $repo
+          }
 
-            ### For CLI Users / 命令行用户
+      - name: Upload NSIS installer + signature
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $nsisDir = "gui-tauri/src-tauri/target/release/bundle/nsis"
 
-            - **`NekoDown_*_x64-portable.zip`** — Contains `neko-down.ps1` + `lib/` + `lang.json`. Green, no installation required.  
-              包含 CLI 脚本和语言包，绿色免安装。
+          # Upload setup.exe
+          $exeMatches = Get-ChildItem -Path "$nsisDir/NekoDown_*_x64-setup.exe"
+          if (-not $exeMatches) { Write-Host "NSIS installer not found in $nsisDir"; exit 1 }
+          foreach ($f in $exeMatches) {
+            Write-Host "Uploading $($f.Name)..."
+            gh release upload $tag $f.FullName --repo Arcohyp/NekoDown --clobber
+          }
 
-            See [README](https://github.com/Arcohyp/NekoDown) for detailed usage.  
-            详细用法请查看 README。
-          releaseDraft: true
-          prerelease: false
+          # Upload .sig file
+          $sigMatches = Get-ChildItem -Path "$nsisDir/NekoDown_*_x64-setup.exe.sig"
+          if (-not $sigMatches) { Write-Host "Signature not found"; exit 1 }
+          foreach ($f in $sigMatches) {
+            Write-Host "Uploading $($f.Name)..."
+            gh release upload $tag $f.FullName --repo Arcohyp/NekoDown --clobber
+          }
 
       - name: Package portable zip
         shell: pwsh
@@ -122,12 +174,16 @@ jobs:
           $pubDate = (Get-Date).ToString('yyyy-MM-ddTHH:mm:ssZ')
           $setupName = "NekoDown_${version}_x64-setup.exe"
           $downloadUrl = "https://github.com/Arcohyp/NekoDown/releases/download/${tag}/${setupName}"
+          # Read the signature file
+          $sigFile = Get-ChildItem "gui-tauri/src-tauri/target/release/bundle/nsis/NekoDown_*_x64-setup.exe.sig" | Select-Object -First 1
+          $signature = if ($sigFile) { (Get-Content $sigFile.FullName -Raw).Trim() } else { "" }
+
           $json = @{
             version   = $version
             notes     = "See https://github.com/Arcohyp/NekoDown/releases/tag/${tag}"
             pub_date  = $pubDate
             url       = $downloadUrl
-            signature = ""
+            signature = $signature
           } | ConvertTo-Json -Compress
           $jsonPath = Join-Path $env:RUNNER_TEMP "latest.json"
           Set-Content -Path $jsonPath -Value $json -Encoding UTF8
