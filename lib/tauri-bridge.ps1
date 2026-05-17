@@ -79,11 +79,16 @@ if ($Action -eq "parse") {
     }
     $shareInfoOut = $null
     if ($info) {
+        # The public /share/info/{id} uses "views" / "user_id",
+        # while the authenticated /api/shares/{id} uses "visited" / "owner.nickname".
+        $viewCount     = if ($null -ne $info.visited) { [int]$info.visited } elseif ($null -ne $info.views) { [int]$info.views } else { 0 }
+        $downloadCount = if ($null -ne $info.downloaded) { [int]$info.downloaded } else { 0 }
+        $ownerName     = if ($info.owner) { [string]$info.owner.nickname } else { "" }
         $shareInfoOut = @{
             name      = [string]$info.name
-            owner     = if ($info.owner) { [string]$info.owner.nickname } else { "" }
-            views     = if ($info.visited) { [int]$info.visited } else { 0 }
-            downloads = if ($info.downloaded) { [int]$info.downloaded } else { 0 }
+            owner     = $ownerName
+            views     = $viewCount
+            downloads = $downloadCount
         }
     }
     Emit-Json @{
