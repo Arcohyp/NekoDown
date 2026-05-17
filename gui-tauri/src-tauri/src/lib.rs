@@ -457,6 +457,11 @@ fn open_folder(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn paths_exist(paths: Vec<String>) -> Vec<bool> {
+    paths.iter().map(|p| std::path::Path::new(p).exists()).collect()
+}
+
+#[tauri::command]
 fn get_config() -> Result<Value, String> {
     let root = find_project_root().map_err(|e| e.to_string())?;
     let cfg_path = root.join("config.json");
@@ -624,6 +629,7 @@ pub fn run() {
             get_version,
             check_update,
             install_update,
+            paths_exist,
         ])
         .setup(move |app| {
             if let Some(window) = app.get_webview_window("main") {
