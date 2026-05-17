@@ -180,6 +180,17 @@ NekoGAL 的 R2 存储有时对单一 IP 限速；脚本已配置浏览器级请�
 
 详见 [GitHub Releases](https://github.com/Arcohyp/NekoDown/releases)。
 
+
+### v3.4.1 (2026-05-17)
+
+- 🐛 **修复自动更新崩溃**：重写 install_update，绕过 tauri-plugin-updater 在空 pubkey 下的签名验证崩溃
+- 🔧 **自动更新进度显示**：下载进度条、安装状态实时回传 UI
+- 🔧 **发布流程修复**：移除不生效的 includeUpdaterJson，改为 CI 手动生成 latest.json
+- 🔧 **引入签名密钥**：为 NSIS 安装器添加签名，支持 /UPDATE 静默更新安装
+- 🧹 **移除测试模式**：删除 Ctrl+Shift+T 布局测试代码
+- 🎨 **分享信息显示修复**：长文件名溢出省略、grid 布局优化
+- 📝 **修复 README 编码**：bump-version.ps1 写回时指定 UTF-8 编码
+
 ### v3.4.0 (2026-05-17)
 
 - 🎉 **重复文件检测**：下载前自动检查输出路径，已有的文件跳过不下载
@@ -187,9 +198,8 @@ NekoGAL 的 R2 存储有时对单一 IP 限速；脚本已配置浏览器级请�
 - 🎨 **取消按钮视觉优化**：点击 cancel 立即归零进度/速度/sparkline
 - 🧹 **清除链接按钮**：Parse 旁新增 ✕ 按钮一键清空输入框
 - 🔁 **清除已完成解除 guard**：不再依赖 activeDownloads，有下载也能清
-- 🔒 **自动粘贴收紧**：限定 `/s/` 后 4-8 位字母数字，避免 UC Drive 误触发
-- 📦 **一键发版脚本**：新增 `scripts/bump-version.ps1` 统一管理版本号
-
+- 🔒 **自动粘贴收紧**：限定 /s/ 后 4-8 位字母数字，避免 UC Drive 误触发
+- 📦 **一键发版脚本**：新增 scripts/bump-version.ps1 统一管理版本号
 ### v3.3.4 (2026-05-16)
 
 - 🐛 **修复下载进度卡住**：PowerShell 进度轮询中的空 catch 改为记录错误，不再静默吞掉异常导致 UI 进度不刷新

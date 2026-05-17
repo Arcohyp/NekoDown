@@ -29,3 +29,7 @@ Thumbs.db
 # config.json
 # Development planning docs
 PLAN.md
+
+# Tauri signing keys (keep secret!)
+.tauri-keys
+.tauri-keys.pub

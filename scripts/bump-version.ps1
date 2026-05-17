@@ -45,7 +45,7 @@ $files = @(
     }
     @{
         Path    = Join-Path $Root "gui-tauri\src-tauri\tauri.conf.json"
-        Pattern = '"version": "\d+\.\d+\.\d+"'
+        Pattern = '"version": "\d+\.\d+\.\d+",?'
         Replace = '"version": "' + $NewVersion + '",'
         Label   = 'tauri.conf.json'
     }
@@ -66,7 +66,7 @@ foreach ($f in $files) {
     if ($content -match $f.Pattern) {
         $newContent = $content -replace $f.Pattern, $f.Replace
         if (-not $DryRun) {
-            Set-Content -LiteralPath $f.Path -Value $newContent -NoNewline
+            Set-Content -LiteralPath $f.Path -Value $newContent -Encoding UTF8 -NoNewline
         }
         Write-Host "  ✓ $($f.Label)" -ForegroundColor Green
     } else {
@@ -98,7 +98,7 @@ if ($idx -ge 0) {
     $newReadme = $readme.Substring(0, $afterLink + 2) + $newEntry + $readme.Substring($afterLink + 2).TrimStart()
 
     if (-not $DryRun) {
-        Set-Content -LiteralPath $readmePath -Value $newReadme -NoNewline
+        Set-Content -LiteralPath $readmePath -Value $newReadme -Encoding UTF8 -NoNewline
     }
     Write-Host "  ✓ README.md changelog" -ForegroundColor Green
 } else {

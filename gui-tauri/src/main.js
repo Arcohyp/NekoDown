@@ -207,6 +207,27 @@ async function init() {
 
   await listen("download-event", (e) => onDownloadEvent(e.payload));
   await listen("download-log", (e) => console.log("[ps]", e.payload?.line));
+  await listen("update-state", (e) => {
+    const payload = e.payload;
+    if (!payload || !payload.state) return;
+    const fill = $("update-progress-fill");
+    const text = $("update-status-text");
+    switch (payload.state) {
+      case "downloading":
+        if (payload.total && payload.total > 0) {
+          const pct = Math.min(100, (payload.downloaded / payload.total) * 100);
+          fill.style.width = pct.toFixed(1) + "%";
+          text.textContent = `${t("updating")} ${pct.toFixed(0)}%`;
+        } else {
+          text.textContent = t("updating");
+        }
+        break;
+      case "installing":
+        text.textContent = "正在安装...";
+        fill.style.width = "100%";
+        break;
+    }
+  });
 
   window.addEventListener("focus", tryAutoPaste);
   await tryAutoPaste();
@@ -218,6 +239,7 @@ async function init() {
 }
 
 /* ===== Auto-updater ===== */
+let _updateInFlight = false;
 async function checkForUpdate() {
   try {
     const latest = await invoke("check_update");
@@ -227,16 +249,41 @@ async function checkForUpdate() {
       versionSpan.textContent = latest;
       banner.classList.remove("hidden");
 
+      // Reset state in case of previous partial attempt
+      _updateInFlight = false;
+      $("update-now-btn").disabled = false;
+      $("update-later-btn").disabled = false;
+      $("update-progress-info").classList.add("hidden");
+      $("update-actions").classList.remove("hidden");
+
       $("update-now-btn").onclick = async () => {
-        setStatus("updating", null);
+        if (_updateInFlight) return;
+        _updateInFlight = true;
+
+        // Swap actions for progress
+        $("update-now-btn").disabled = true;
+        $("update-later-btn").disabled = true;
+        $("update-actions").classList.add("hidden");
+        $("update-progress-info").classList.remove("hidden");
+
         try {
           await invoke("install_update");
+          // install_update restarts the process on success,
+          // so we should never reach here.
         } catch (e) {
-          console.error("install_update failed", e);
-          setStatus("update_failed", "error");
+          const msg = typeof e === "string" ? e : (e?.message || String(e));
+          console.error("install_update failed:", msg);
+          setStatusRaw(`更新失败: ${msg}`, "error");
+          // Restore banner so user can retry
+          $("update-actions").classList.remove("hidden");
+          $("update-progress-info").classList.add("hidden");
+          $("update-now-btn").disabled = false;
+          $("update-later-btn").disabled = false;
+          _updateInFlight = false;
         }
       };
       $("update-later-btn").onclick = () => {
+        if (_updateInFlight) return;
         $("update-banner").classList.add("hidden");
       };
     }

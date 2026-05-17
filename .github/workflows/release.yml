@@ -29,6 +29,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: ./gui-tauri
           tagName: ${{ github.ref_name }}
@@ -58,7 +60,6 @@ jobs:
             详细用法请查看 README。
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: true
 
       - name: Package portable zip
         shell: pwsh
@@ -110,3 +111,27 @@ jobs:
             Write-Host "Portable zip not found at $zip"
             exit 1
           }
+
+      - name: Generate and upload latest.json
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          $pubDate = (Get-Date).ToString('yyyy-MM-ddTHH:mm:ssZ')
+          $setupName = "NekoDown_${version}_x64-setup.exe"
+          $downloadUrl = "https://github.com/Arcohyp/NekoDown/releases/download/${tag}/${setupName}"
+          $json = @{
+            version   = $version
+            notes     = "See https://github.com/Arcohyp/NekoDown/releases/tag/${tag}"
+            pub_date  = $pubDate
+            url       = $downloadUrl
+            signature = ""
+          } | ConvertTo-Json -Compress
+          $jsonPath = Join-Path $env:RUNNER_TEMP "latest.json"
+          Set-Content -Path $jsonPath -Value $json -Encoding UTF8
+          Write-Host "Generated latest.json:"
+          Write-Host $json
+          gh release upload $tag $jsonPath --repo Arcohyp/NekoDown --clobber
+          Write-Host "latest.json uploaded successfully"
