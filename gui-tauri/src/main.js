@@ -2,6 +2,7 @@ const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const { open } = window.__TAURI__.dialog || {};
 const { readText } = (window.__TAURI__.clipboardManager || {});
+const { sendNotification } = (window.__TAURI__.notification || {});
 
 const state = {
   domain: "",
@@ -53,6 +54,106 @@ function setStatusRaw(text, kind) {
   el.className = "status" + (kind ? " " + kind : "");
   delete el.dataset.statusKey;
   delete el.dataset.statusArgs;
+}
+
+/* ===== Sound Effects ===== */
+let soundEnabled = true;
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playTone(freq, duration, type = "sine", volume = 0.15) {
+  if (!soundEnabled || !audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  } catch (e) { console.error("Audio error:", e); }
+}
+function playSuccessSound() {
+  if (!soundEnabled) return;
+  playTone(523, 0.15, "sine", 0.12);      // C5
+  setTimeout(() => playTone(784, 0.25, "sine", 0.15), 100); // G5
+  setTimeout(() => playTone(1047, 0.35, "sine", 0.12), 200); // C6
+}
+function playFailSound() {
+  if (!soundEnabled) return;
+  playTone(200, 0.3, "triangle", 0.15);   // low A3
+  setTimeout(() => playTone(150, 0.4, "triangle", 0.12), 150); // lower E3
+}
+
+/* ===== Confetti Celebration ===== */
+function fireConfetti(x, y) {
+  const canvas = document.createElement("canvas");
+  canvas.style.position = "fixed";
+  canvas.style.top = "0";
+  canvas.style.left = "0";
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  canvas.style.pointerEvents = "none";
+  canvas.style.zIndex = "9999";
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+
+  const colors = ["#39C5BB", "#E85298", "#ff7eb6", "#67e8f9", "#a3e635", "#fbbf24"];
+  const particles = [];
+  const originX = x ?? w / 2;
+  const originY = y ?? h / 2;
+  for (let i = 0; i < 60; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 6 + 2;
+    particles.push({
+      x: originX,
+      y: originY,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 4,
+      size: Math.random() * 4 + 2,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      rotation: Math.random() * Math.PI,
+      rotSpeed: (Math.random() - 0.5) * 0.2,
+      life: 1.0,
+      decay: Math.random() * 0.02 + 0.015,
+    });
+  }
+
+  let startTime = null;
+  function animate(ts) {
+    if (!startTime) startTime = ts;
+    ctx.clearRect(0, 0, w, h);
+    let alive = false;
+    for (const p of particles) {
+      if (p.life <= 0) continue;
+      alive = true;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.15; // gravity
+      p.rotation += p.rotSpeed;
+      p.life -= p.decay;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation);
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+      ctx.restore();
+    }
+    if (alive && ts - startTime < 2500) {
+      requestAnimationFrame(animate);
+    } else {
+      canvas.remove();
+    }
+  }
+  requestAnimationFrame(animate);
 }
 
 async function loadI18n() {
@@ -229,6 +330,61 @@ async function init() {
     }
   });
 
+  /* ===== Title Bar Buttons ===== */
+  $("tb-min").addEventListener("click", () => invoke("minimize_window"));
+  $("tb-max").addEventListener("click", () => invoke("maximize_window"));
+  $("tb-tray").addEventListener("click", () => invoke("hide_window"));
+  $("tb-close").addEventListener("click", async () => {
+    const cfg = await invoke("get_config");
+    if (cfg.rememberCloseAction && cfg.close_action && cfg.close_action !== "ask") {
+      if (cfg.close_action === "exit") {
+        invoke("exit_app");
+      } else {
+        invoke("hide_window");
+      }
+      return;
+    }
+    showExitConfirm();
+  });
+
+  /* ===== Exit Confirm Dialog ===== */
+  $("exit-action-tray").addEventListener("click", async () => {
+    const remember = $("remember-exit-choice").checked;
+    if (remember) {
+      try {
+        const cfg = await invoke("get_config");
+        cfg.closeAction = "tray";
+        cfg.rememberCloseAction = true;
+        await invoke("save_config", { cfg });
+      } catch (e) {
+        console.error("save close action failed", e);
+      }
+    }
+    hideExitConfirm();
+    invoke("hide_window");
+  });
+  $("exit-action-exit").addEventListener("click", async () => {
+    const remember = $("remember-exit-choice").checked;
+    if (remember) {
+      try {
+        const cfg = await invoke("get_config");
+        cfg.closeAction = "exit";
+        cfg.rememberCloseAction = true;
+        await invoke("save_config", { cfg });
+      } catch (e) {
+        console.error("save close action failed", e);
+      }
+    }
+    hideExitConfirm();
+    invoke("exit_app");
+  });
+  $("exit-confirm-overlay").addEventListener("click", (e) => {
+    if (e.target.id === "exit-confirm-overlay") hideExitConfirm();
+  });
+
+  // Listen for Alt+F4 / system close
+  await listen("show-exit-confirm", () => showExitConfirm());
+
   window.addEventListener("focus", tryAutoPaste);
   await tryAutoPaste();
 
@@ -236,6 +392,13 @@ async function init() {
   setTimeout(() => checkForUpdate(), 8000);
 
   setStatus("ready");
+}
+
+function showExitConfirm() {
+  $("exit-confirm-overlay").classList.add("active");
+}
+function hideExitConfirm() {
+  $("exit-confirm-overlay").classList.remove("active");
 }
 
 /* ===== Auto-updater ===== */
@@ -292,7 +455,7 @@ async function checkForUpdate() {
   }
 }
 
-const THEMES = ["neko", "moonlight", "sakura", "forest"];
+const THEMES = ["neko", "sakura"];
 function cycleTheme() {
   const cur = document.body.dataset.theme || "neko";
   const next = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
@@ -510,6 +673,12 @@ async function startSingleDownload(file) {
       status.textContent = t("completed_status");
       status.dataset.i18n = "completed_status";
       li.querySelector(".progress-bar-fill").style.width = "100%";
+      playSuccessSound();
+      const rect = li.getBoundingClientRect();
+      fireConfetti(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      if (sendNotification) {
+        sendNotification({ title: t("download_complete_title"), body: t("download_complete_body", file.name) });
+      }
       return { success: true };
     } else {
       const status = li.querySelector(".progress-status");
@@ -517,6 +686,11 @@ async function startSingleDownload(file) {
       status.textContent = t("failed_status");
       status.dataset.i18n = "failed_status";
       console.error("download failed", file.path, result);
+      playFailSound();
+      if (sendNotification) {
+        const errMsg = result.error || (result.code ? `exit code ${result.code}` : t("unknown"));
+        sendNotification({ title: t("download_failed_title"), body: t("download_failed_body", file.name, errMsg) });
+      }
       return { success: false, error: result.error || `exit code ${result.code}` };
     }
   } catch (e) {
@@ -525,6 +699,11 @@ async function startSingleDownload(file) {
     status.textContent = t("failed_status");
     status.dataset.i18n = "failed_status";
     console.error("download failed", file.path, e);
+    playFailSound();
+    if (sendNotification) {
+      const errMsg = e?.message || String(e);
+      sendNotification({ title: t("download_failed_title"), body: t("download_failed_body", file.name, errMsg) });
+    }
     return { success: false, error: e };
   }
 }
@@ -533,6 +712,29 @@ async function onCancel() {
   if (!state.downloading) return;
   state.cancelled = true;
   $("cancel-btn").disabled = true;
+
+  // Freeze every active download UI immediately and mark them so progress
+  // events are ignored (both in-flight buffered ones and any stragglers).
+  state.activeDownloads.forEach((entry) => {
+    if (entry.file && entry.file.path) {
+      state.cancelling.add(entry.file.path);
+    }
+    const li = entry.li;
+    if (li) {
+      const fill = li.querySelector(".progress-bar-fill");
+      if (fill) fill.style.width = "0%";
+      const meta = li.querySelector(".progress-meta");
+      if (meta) meta.textContent = "";
+      const spark = li.querySelector(".spark");
+      if (spark) {
+        const ctx = spark.getContext("2d");
+        ctx.clearRect(0, 0, spark.width, spark.height);
+      }
+      const id = li.dataset.id;
+      if (id) state.sparkData.set(id, []);
+    }
+  });
+
   const ids = Array.from(state.activeDownloads.keys());
   await Promise.all(ids.map((id) => invoke("cancel_download", { id }).catch(() => {})));
   $("cancel-btn").disabled = false;
@@ -609,7 +811,9 @@ async function onDownload() {
         <canvas class="spark" width="64" height="18"></canvas>
         <button class="btn-cancel-file hidden" title="${t('cancel_file')}">✕</button>
       </div>
-      <div class="progress-bar"><div class="progress-bar-fill"></div></div>
+      <div class="progress-bar">
+        <div class="progress-bar-fill"></div>
+      </div>
     `;
     progressList.appendChild(li);
     state.progressByPath.set(id, li);
@@ -631,6 +835,8 @@ async function onDownload() {
   if (batchUnlisten) batchUnlisten();
 
   state.downloading = false;
+  state.cancelled = false;
+  state.cancelling.clear();
   $("download-btn").classList.remove("hidden");
   $("cancel-btn").classList.add("hidden");
   $("parse-btn").disabled = false;
@@ -640,8 +846,9 @@ async function onDownload() {
 function onDownloadEvent(payload) {
   if (!payload || !payload.event) return;
   if (payload.event === "progress") {
-    // Ignore progress for files that have been cancelled.
+    // Ignore progress for files that have been cancelled (per-file or global).
     if (state.cancelling.has(payload.filePath)) return;
+    if (state.cancelled) return;
     const row = state.progressByPath.get(payload.filePath);
     if (!row) return;
     const total = Number(payload.total) || 0;
@@ -765,6 +972,7 @@ async function openSettings() {
   $("cfg-checkDiskSpace").checked = cfg.checkDiskSpace ?? true;
   $("cfg-minFreeSpace").value  = cfg.minFreeSpaceGB ?? 2;
   $("cfg-proxy").value         = cfg.proxy || "";
+  $("cfg-sound").checked       = cfg.soundEnabled ?? true;
   $("settings-msg").textContent = "";
   $("settings-overlay").classList.add("active");
 }
@@ -781,11 +989,13 @@ async function applySettings() {
     checkDiskSpace: $("cfg-checkDiskSpace").checked,
     minFreeSpaceGB: Number($("cfg-minFreeSpace").value) || 2,
     proxy: $("cfg-proxy").value.trim(),
+    soundEnabled: $("cfg-sound").checked,
     logEnabled: true,
   };
   try {
     await invoke("save_config", { cfg });
     state.defaultConnections = cfg.defaultConnections;
+    soundEnabled = cfg.soundEnabled ?? true;
     const chosenLang = cfg.language;
     if (chosenLang !== i18nLang) {
       await switchLanguage(chosenLang);

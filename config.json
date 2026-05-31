@@ -7,5 +7,6 @@
     "checkDiskSpace":  true,
     "minFreeSpaceGB":  2,
     "proxy":  "",
-    "language":  "en-US"
+    "language":  "en-US",
+    "soundEnabled":  true
 }

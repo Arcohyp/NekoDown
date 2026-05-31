@@ -12,14 +12,20 @@
       {
         "title": "NekoDown",
         "width": 980,
-        "height": 640,
+        "height": 660,
         "minWidth": 820,
-        "minHeight": 520,
+        "minHeight": 540,
         "center": true,
-        "decorations": true,
-        "transparent": false
+        "decorations": false,
+        "transparent": true,
+        "hiddenTitle": true
       }
     ],
+    "trayIcon": {
+      "id": "main-tray",
+      "iconPath": "icons/icon.png",
+      "tooltip": "NekoDown"
+    },
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://github.com https://api.github.com"
     }

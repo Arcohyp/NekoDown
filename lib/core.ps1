@@ -239,16 +239,23 @@ function Parse-ShareLink {
 # ==================== Cloudreve API ====================
 function Get-ShareInfo {
     param([string]$shareId, [string]$domain)
-    # Cloudreve v4 public endpoint (no auth required)
-    try {
-        $r = Invoke-RestMethod -Uri "$domain/share/info/$shareId" -TimeoutSec 30
-        if ($r.code -eq 0 -and $r.data) { return $r.data }
-    } catch { Write-Warn "Failed to get share info (public): $_" }
-    # Fallback: older/api prefix
-    try {
-        $r = Invoke-RestMethod -Uri "$domain/api/v4/share/info/$shareId" -TimeoutSec 30
-        if ($r.code -eq 0 -and $r.data) { return $r.data }
-    } catch { Write-Warn "Failed to get share info (v4 fallback): $_" }
+    $endpoints = @(
+        "$domain/share/info/$shareId"
+        "$domain/api/v4/share/info/$shareId"
+        "$domain/api/v3/share/info/$shareId"
+    )
+    foreach ($uri in $endpoints) {
+        try {
+            $r = Invoke-RestMethod -Uri $uri -TimeoutSec 30
+            if ($r.code -eq 0 -and $r.data) {
+                $json = $r.data | ConvertTo-Json -Compress -Depth 3
+                Write-Info "Share info from $uri -> $json"
+                return $r.data
+            }
+        } catch {
+            Write-Warn "Failed to get share info from $uri : $_"
+        }
+    }
     return $null
 }
 

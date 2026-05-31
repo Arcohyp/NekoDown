@@ -81,9 +81,20 @@ if ($Action -eq "parse") {
     if ($info) {
         # The public /share/info/{id} uses "views" / "user_id",
         # while the authenticated /api/shares/{id} uses "visited" / "owner.nickname".
-        $viewCount     = if ($null -ne $info.visited) { [int]$info.visited } elseif ($null -ne $info.views) { [int]$info.views } else { 0 }
-        $downloadCount = if ($null -ne $info.downloaded) { [int]$info.downloaded } else { 0 }
-        $ownerName     = if ($info.owner) { [string]$info.owner.nickname } else { "" }
+        # Some Cloudreve instances may use different field names or omit stats entirely.
+        $viewCount     = if ($null -ne $info.visited)      { [int]$info.visited }
+                          elseif ($null -ne $info.views)   { [int]$info.views }
+                          elseif ($null -ne $info.view_count) { [int]$info.view_count }
+                          else { 0 }
+        $downloadCount = if ($null -ne $info.downloaded)   { [int]$info.downloaded }
+                          elseif ($null -ne $info.downloads) { [int]$info.downloads }
+                          elseif ($null -ne $info.download_count) { [int]$info.download_count }
+                          else { 0 }
+        $ownerName     = if ($info.owner -and $info.owner.nickname) { [string]$info.owner.nickname }
+                          elseif ($info.owner -and $info.owner.name) { [string]$info.owner.name }
+                          elseif ($info.user -and $info.user.nickname) { [string]$info.user.nickname }
+                          elseif ($info.creator) { [string]$info.creator }
+                          else { "" }
         $shareInfoOut = @{
             name      = [string]$info.name
             owner     = $ownerName

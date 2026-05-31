@@ -1,73 +1,45 @@
 :root {
-  --bg: #15101e;
-  --bg-elev: #1f1830;
-  --bg-soft: #2a223e;
-  --border: #3b2f54;
-  --text: #f3edff;
-  --text-muted: #a89cc4;
+  --bg: #1a1a20;
+  --bg-elev: #25252e;
+  --bg-soft: #33333d;
+  --border: #4a4a58;
+  --text: #f5eef5;
+  --text-muted: #a89dae;
   --accent: #ff7eb6;
   --accent-strong: #ff5fa0;
-  --accent-soft: #c89eff;
-  --accent-on: #2a0d1f;
-  --success: #a3e635;
+  --accent-soft: #ffc2e0;
+  --accent-on: #1a1a20;
+  --success: #86efac;
   --danger: #f87171;
   --warn: #fbbf24;
 }
 
-/* ========== Theme: Neko Pink (default, 粉桃) ========== */
+/* ========== Theme: Neko Dark (默认深色) ========== */
 body[data-theme="neko"] {
-  --bg: #15101e;
-  --bg-elev: #1f1830;
-  --bg-soft: #2a223e;
-  --border: #3b2f54;
-  --text: #f3edff;
-  --text-muted: #a89cc4;
+  --bg: #1a1a20;
+  --bg-elev: #25252e;
+  --bg-soft: #33333d;
+  --border: #4a4a58;
+  --text: #f5eef5;
+  --text-muted: #a89dae;
   --accent: #ff7eb6;
   --accent-strong: #ff5fa0;
-  --accent-soft: #c89eff;
-  --accent-on: #2a0d1f;
+  --accent-soft: #ffc2e0;
+  --accent-on: #1a1a20;
 }
 
-/* ========== Theme: Moonlight (月夜, cyan/blue dark) ========== */
-body[data-theme="moonlight"] {
-  --bg: #0e1726;
-  --bg-elev: #16223a;
-  --bg-soft: #1f2c4a;
-  --border: #2c3e63;
-  --text: #e6f1ff;
-  --text-muted: #8ba0c6;
-  --accent: #67e8f9;
-  --accent-strong: #22d3ee;
-  --accent-soft: #818cf8;
-  --accent-on: #06121f;
-}
-
-/* ========== Theme: Sakura (樱花, light pink) ========== */
+/* ========== Theme: Neko Light (浅色) ========== */
 body[data-theme="sakura"] {
   --bg: #fff5f7;
-  --bg-elev: #ffe8ee;
-  --bg-soft: #ffd3dd;
-  --border: #f5b8c5;
+  --bg-elev: #fff0f3;
+  --bg-soft: #ffe0e8;
+  --border: #f5c8d5;
   --text: #4a1a2c;
-  --text-muted: #98627a;
-  --accent: #e85d8c;
-  --accent-strong: #d63f73;
-  --accent-soft: #b76ad6;
+  --text-muted: #b08090;
+  --accent: #ff5fa0;
+  --accent-strong: #e8458a;
+  --accent-soft: #ffb8d8;
   --accent-on: #fff5f7;
-}
-
-/* ========== Theme: Forest (森林, dark green) ========== */
-body[data-theme="forest"] {
-  --bg: #0f1a14;
-  --bg-elev: #1a2820;
-  --bg-soft: #243429;
-  --border: #2f4538;
-  --text: #e3f2e7;
-  --text-muted: #8aa896;
-  --accent: #86efac;
-  --accent-strong: #4ade80;
-  --accent-soft: #fde68a;
-  --accent-on: #0a1410;
 }
 
 * { box-sizing: border-box; }
@@ -87,11 +59,70 @@ html, body {
 
 .app {
   position: relative;
-  height: 100vh;
+  height: calc(100vh - 36px);
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   gap: 12px;
   padding: 16px;
+}
+
+/* ===== Title Bar ===== */
+.titlebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  app-region: drag;
+  user-select: none;
+  flex-shrink: 0;
+}
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.titlebar-icon { font-size: 16px; }
+.titlebar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.titlebar-right {
+  display: flex;
+  gap: 0;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+.titlebar-btn {
+  width: 46px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  border-radius: 0;
+}
+.titlebar-btn:hover {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+.titlebar-btn.titlebar-close:hover {
+  background: var(--danger);
+  color: #fff;
 }
 
 .update-banner {
@@ -598,4 +629,76 @@ html, body {
 .btn-cancel-file:disabled {
   opacity: 0.2;
   cursor: not-allowed;
+}
+
+/* ===== Progress Bar ===== */
+.progress-bar {
+  position: relative;
+  height: 6px;
+  background: var(--bg-elev);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-soft) 100%);
+  width: 0;
+  border-radius: 3px;
+  transition: width 0.25s ease-out;
+}
+
+/* ===== Exit Confirm Dialog ===== */
+.exit-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 320px;
+  padding: 28px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  animation: popIn 0.25s ease-out;
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.92) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.exit-question {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+.exit-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+.exit-btn {
+  flex: 1;
+  padding: 10px 0;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  transition: transform 0.1s, filter 0.15s;
+}
+.exit-btn:active { transform: scale(0.96); }
+.exit-remember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.exit-remember input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }

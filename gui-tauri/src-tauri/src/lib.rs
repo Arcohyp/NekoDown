@@ -255,6 +255,12 @@ struct AppConfig {
     proxy: String,
     #[serde(default = "default_language")]
     language: String,
+    #[serde(default = "default_sound_enabled")]
+    sound_enabled: bool,
+    #[serde(default = "default_close_action")]
+    close_action: String,
+    #[serde(default = "default_remember_close_action")]
+    remember_close_action: bool,
 }
 
 impl AppConfig {
@@ -269,6 +275,9 @@ impl AppConfig {
             min_free_space_gb: 2,
             proxy: String::new(),
             language: "auto".to_string(),
+            sound_enabled: true,
+            close_action: "ask".to_string(),
+            remember_close_action: false,
         }
     }
 }
@@ -286,6 +295,9 @@ fn default_log_enabled() -> bool { true }
 fn default_check_disk_space() -> bool { true }
 fn default_min_free_space_gb() -> u32 { 2 }
 fn default_language() -> String { "auto".to_string() }
+fn default_sound_enabled() -> bool { true }
+fn default_close_action() -> String { "ask".to_string() }
+fn default_remember_close_action() -> bool { false }
 
 #[tauri::command]
 fn parse_share(link: String) -> Result<Value, String> {
@@ -687,6 +699,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             parse_share,
@@ -701,18 +714,85 @@ pub fn run() {
             check_update,
             install_update,
             paths_exist,
+            minimize_window,
+            maximize_window,
+            hide_window,
+            show_window,
+            exit_app,
         ])
         .setup(move |app| {
-            if let Some(window) = app.get_webview_window("main") {
+            let app_handle = app.handle().clone();
+            let main_window = app.get_webview_window("main")
+                .ok_or_else(|| anyhow::anyhow!("主窗口未找到"))?;
+
+            // --- Tray Icon: left-click shows window ---
+            if let Some(tray) = app.tray_by_id("main-tray") {
+                let win = main_window.clone();
+                tray.on_tray_icon_event(move |_tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
+                        let _ = win.show();
+                        let _ = win.set_focus();
+                    }
+                });
+            }
+
+            // --- Close confirmation ---
+            {
+                let _win = main_window.clone();
+                let ah = app_handle.clone();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        // Always prevent default close; let frontend decide.
+                        api.prevent_close();
+                        let _ = ah.emit("show-exit-confirm", ());
+                    }
+                });
+            }
+
+            // --- Cancel active downloads on explicit exit ---
+            {
                 let m = manager.clone();
-                window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Destroyed = event {
                         m.cancel_all();
                     }
                 });
             }
+
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// ==================== Window Control Commands ====================
+
+#[tauri::command]
+fn minimize_window(window: tauri::WebviewWindow) {
+    let _ = window.minimize();
+}
+
+#[tauri::command]
+fn maximize_window(window: tauri::WebviewWindow) {
+    if let Ok(true) = window.is_maximized() {
+        let _ = window.unmaximize();
+    } else {
+        let _ = window.maximize();
+    }
+}
+
+#[tauri::command]
+fn hide_window(window: tauri::WebviewWindow) {
+    let _ = window.hide();
+}
+
+#[tauri::command]
+fn show_window(window: tauri::WebviewWindow) {
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
 }

@@ -153,12 +153,20 @@
         "unknown":                   "Unknown error",
         "theme":                     "Switch theme",
         "proxy":                     "Proxy",
+        "sound_effects":             "Sound Effects",
         "not_configured":            "Not configured",
+        "exit_confirm_title":        "Leaving already? Meow~ 🐾",
+        "exit_action_exit":          "Exit",
+        "exit_action_tray":          "To Tray",
+        "remember_my_choice":        "Remember my choice",
+        "confirm":                   "Confirm",
+        "download_complete_title":   "Download Complete",
+        "download_complete_body":    "{0} downloaded successfully",
+        "download_failed_title":     "Download Failed",
+        "download_failed_body":      "{0} failed: {1}",
         "theme_changed":             "Theme: {0}",
-        "theme_neko":                "Neko",
-        "theme_moonlight":           "Moonlight",
-        "theme_sakura":              "Sakura",
-        "theme_forest":              "Forest"
+        "theme_neko":                "Neko Dark",
+        "theme_sakura":              "Neko Light"
     },
     "zh-CN": {
         "aria2_not_found":           "aria2 未找到！正在尝试自动安装...",
@@ -314,11 +322,19 @@
         "unknown":                   "未知错误",
         "theme":                     "切换主题",
         "proxy":                     "代理",
+        "sound_effects":             "音效",
         "not_configured":            "未配置",
+        "exit_confirm_title":        "要离开了吗喵？🐾",
+        "exit_action_exit":          "退出喵",
+        "exit_action_tray":          "最小化到托盘喵",
+        "remember_my_choice":        "记住本喵的选择",
+        "confirm":                   "确认",
+        "download_complete_title":   "下载完成",
+        "download_complete_body":    "{0} 已成功下载",
+        "download_failed_title":     "下载失败",
+        "download_failed_body":      "{0} 下载失败：{1}",
         "theme_changed":             "主题：{0}",
-        "theme_neko":                "粉桃",
-        "theme_moonlight":           "月夜",
-        "theme_sakura":              "樱花",
-        "theme_forest":              "森林"
+        "theme_neko":                "Neko 深色",
+        "theme_sakura":              "Neko 浅色"
     }
 }

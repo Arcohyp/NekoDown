@@ -8,6 +8,18 @@
     <script type="module" src="/main.js" defer></script>
   </head>
   <body data-theme="neko">
+    <div class="titlebar" data-tauri-drag-region>
+      <div class="titlebar-left" data-tauri-drag-region>
+        <span class="titlebar-icon">🐾</span>
+        <span class="titlebar-title" data-tauri-drag-region>NekoDown</span>
+      </div>
+      <div class="titlebar-right">
+        <button class="titlebar-btn" id="tb-tray" title="最小化到托盘">⤓</button>
+        <button class="titlebar-btn" id="tb-min" title="最小化">−</button>
+        <button class="titlebar-btn" id="tb-max" title="最大化">□</button>
+        <button class="titlebar-btn titlebar-close" id="tb-close" title="关闭">×</button>
+      </div>
+    </div>
     <main class="app">
       <div id="update-banner" class="update-banner hidden">
         <span class="update-text">发现新版本 <span id="update-version"></span></span>
@@ -104,6 +116,21 @@
       </footer>
     </main>
 
+    <!-- Exit Confirmation Dialog -->
+    <div id="exit-confirm-overlay" class="modal-overlay">
+      <div class="exit-card">
+        <div class="exit-question" data-i18n="exit_confirm_title">要离开了吗喵？🐾</div>
+        <div class="exit-actions">
+          <button id="exit-action-tray" class="btn btn-ghost exit-btn" data-i18n="exit_action_tray">最小化到托盘喵</button>
+          <button id="exit-action-exit" class="btn btn-primary exit-btn" data-i18n="exit_action_exit">退出喵</button>
+        </div>
+        <label class="exit-remember">
+          <input type="checkbox" id="remember-exit-choice" />
+          <span data-i18n="remember_my_choice">记住本喵的选择</span>
+        </label>
+      </div>
+    </div>
+
     <div id="settings-overlay" class="modal-overlay">
       <div class="modal-card">
         <div class="modal-head">
@@ -138,6 +165,11 @@
 
           <label data-i18n="proxy">Proxy：</label>
           <input type="text" id="cfg-proxy" placeholder="http://127.0.0.1:8080" />
+
+          <label class="inline">
+            <input type="checkbox" id="cfg-sound" />
+            <span data-i18n="sound_effects">音效</span>
+          </label>
         </div>
         <div class="modal-foot">
           <span id="settings-msg" class="settings-msg"></span>
