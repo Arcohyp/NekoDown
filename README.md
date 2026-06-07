@@ -10,7 +10,7 @@
 
 ## ✨ 特性
 
-- 🪟 **原生 GUI**（Tauri + WebView2）：暗色主题、4 套配色（粉桃/月夜/樱花/森林），单文件 .exe 仅约 5 MB
+- 🪟 **原生 GUI**（Tauri + WebView2）：暗色/亮色双主题切换，单文件 .exe 仅约 5 MB
 - 📦 **单文件运行**：`nekodown-gui.exe` 内置全部脚本与语言包，首次启动自动释放，无需携带 `lib/` 文件夹
 - 🌿 **绿色优先**：释放位置跟随 exe 所在目录（桌面、U盘均可）；若目录只读则自动 fallback 到 `%LOCALAPPDATA%`
 - ⌨️ **命令行版本**（PowerShell）：纯 ps1 脚本，绿色便携，零依赖
@@ -20,6 +20,12 @@
 - 🔄 **断点续传**：检测 `.aria2` 控制文件，中断后自动恢复
 - 🛡️ **安全文件名**：自动替换 Windows 非法字符与保留名（CON/PRN…）
 - 💾 **磁盘空间检查**：下载前自动验证可用空间
+
+### 🎨 主题预览
+
+| Neko Dark | Neko Light |
+|:---------:|:----------:|
+| ![Neko Dark](docs/ui_theme_neko.png) | ![Neko Light](docs/ui_theme_sakura.png) |
 
 ---
 
