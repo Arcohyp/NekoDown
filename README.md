@@ -2,6 +2,8 @@
 
 **专为 NekoGAL 优化的 Cloudreve 分享链接下载工具**
 
+[English](docs/README_EN.md) | 中文
+
 提供原生 GUI 和命令行两种使用方式，自动调用 aria2 多线程下载，支持中日文文件名、断点续传、磁盘空间检查、自动重试。
 
 > 🐾 **本工具针对 [NekoGAL](https://www.nekogal.com/) 深度优化**，完美支持其 Cloudflare R2 存储后端、大文件下载及中文/日文文件名处理。
