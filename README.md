@@ -181,59 +181,25 @@ NekoGAL 的 R2 存储有时对单一 IP 限速；脚本已配置浏览器级请�
 详见 [GitHub Releases](https://github.com/Arcohyp/NekoDown/releases)。
 
 
+### v3.4.2 (2026-06-07)
+
+- 🔒 **移除自动更新**：关闭自动下载安装功能，改为提示用户前往 GitHub Releases 手动下载，消除未签名 EXE 执行的 RCE 风险
+- 🛡️ **安全加固**：`Sanitize-FileName` 增加 Unicode 全角斜杠过滤，Windows 保留名检查补全 `CLOCK$`/`COM0`/`LPT0`
+
 ### v3.4.1 (2026-05-17)
 
-- 🐛 **修复自动更新崩溃**：重写 install_update，绕过 tauri-plugin-updater 在空 pubkey 下的签名验证崩溃
-- 🔧 **自动更新进度显示**：下载进度条、安装状态实时回传 UI
-- 🔧 **发布流程修复**：移除不生效的 includeUpdaterJson，改为 CI 手动生成 latest.json
-- 🔧 **引入签名密钥**：为 NSIS 安装器添加签名，支持 /UPDATE 静默更新安装
-- 🧹 **移除测试模式**：删除 Ctrl+Shift+T 布局测试代码
+- 🐛 **修复自动更新崩溃**：重写 install_update，绕过签名验证崩溃
+- 🔧 **引入签名密钥**：NSIS 安装器添加签名，支持 /UPDATE 静默更新
 - 🎨 **分享信息显示修复**：长文件名溢出省略、grid 布局优化
-- 📝 **修复 README 编码**：bump-version.ps1 写回时指定 UTF-8 编码
 
 ### v3.4.0 (2026-05-17)
 
-- 🎉 **重复文件检测**：下载前自动检查输出路径，已有的文件跳过不下载
-- 🐛 **分享信息显示修复**：修正 Get-ShareInfo API 地址与字段映射
-- 🎨 **取消按钮视觉优化**：点击 cancel 立即归零进度/速度/sparkline
+- 🎉 **重复文件检测**：下载前自动检查输出路径，已有文件跳过
 - 🧹 **清除链接按钮**：Parse 旁新增 ✕ 按钮一键清空输入框
-- 🔁 **清除已完成解除 guard**：不再依赖 activeDownloads，有下载也能清
-- 🔒 **自动粘贴收紧**：限定 /s/ 后 4-8 位字母数字，避免 UC Drive 误触发
-- 📦 **一键发版脚本**：新增 scripts/bump-version.ps1 统一管理版本号
-### v3.3.4 (2026-05-16)
+- 🔒 **自动粘贴收紧**：限定 /s/ 后 4-8 位字母数字
+- 📦 **一键发版脚本**：新增 `scripts/bump-version.ps1`
 
-- 🐛 **修复下载进度卡住**：PowerShell 进度轮询中的空 catch 改为记录错误，不再静默吞掉异常导致 UI 进度不刷新
-- 🐛 **修复 Rust 管道读取线程静默退出**：stdout/stderr 读取从 `map_while(Result::ok)` 改为显式错误处理
-- 🌐 **补全 i18n**：动态创建的进度状态元素加上 `data-i18n` 属性，切换语言时状态文字（下载中/已完成/失败）正确跟随
-
-### v3.3.3 (2026-05-15)
-
-- 🔄 **自动更新**：启动后自动检测 GitHub Releases 新版本，一键下载安装
-- 🐛 **修复大文件下载误报失败**：移除前端 5 分钟硬编码超时，大文件下载不再被提前判定为失败
-- 🐛 修复主题/语言切换时状态栏中英文混排
-
-### v3.3.1 (2026-05)
-
-- 🎉 GUI 与 CLI 版本号统一为 3.3.1
-- 🔄 动态版本号：从 Cargo.toml 自动读取
-- 🔧 清理废弃的 wip/single-exe-robustness 分支
-
-### v3.3.0 (2026-05)
-
-- 🎉 全新 GUI（Tauri + WebView2），单文件 .exe，4 主题切换
-- 📦 **资源嵌入**：`lib/*.ps1` 与 `lang.json` 编译进二进制，exe 单独运行即可自动释放
-- 🌿 **绿色优先**：脚本优先释放到 exe 旁；U盘/桌面即插即用，目录只读时自动 fallback 到 `%LOCALAPPDATA%`
-- 🏗️ 重构：抽出 `lib/`，CLI 与 GUI 共用同一份下载核心
-- 📦 NSIS 安装器自动构建（GitHub Actions）
-- 🌐 `lang.json` 升级为中英完整字典
-
-### v3.2.x (2026-04)
-
-- aria2 退出码翻译、断点续传修复、文件名清洗、自动安装 aria2
-
-### v3.1.x (2026-04)
-
-- NekoGAL 深度优化：R2 存储适配、浏览器请求头、跨环境兼容
+> 更早版本详见 [GitHub Releases](https://github.com/Arcohyp/NekoDown/releases)。
 
 ---
 
