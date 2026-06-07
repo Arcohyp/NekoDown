@@ -147,7 +147,7 @@ function fireConfetti(x, y) {
       ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
       ctx.restore();
     }
-    if (alive && ts - startTime < 2500) {
+    if (alive) {
       requestAnimationFrame(animate);
     } else {
       canvas.remove();
@@ -308,27 +308,6 @@ async function init() {
 
   await listen("download-event", (e) => onDownloadEvent(e.payload));
   await listen("download-log", (e) => console.log("[ps]", e.payload?.line));
-  await listen("update-state", (e) => {
-    const payload = e.payload;
-    if (!payload || !payload.state) return;
-    const fill = $("update-progress-fill");
-    const text = $("update-status-text");
-    switch (payload.state) {
-      case "downloading":
-        if (payload.total && payload.total > 0) {
-          const pct = Math.min(100, (payload.downloaded / payload.total) * 100);
-          fill.style.width = pct.toFixed(1) + "%";
-          text.textContent = `${t("updating")} ${pct.toFixed(0)}%`;
-        } else {
-          text.textContent = t("updating");
-        }
-        break;
-      case "installing":
-        text.textContent = "正在安装...";
-        fill.style.width = "100%";
-        break;
-    }
-  });
 
   /* ===== Title Bar Buttons ===== */
   $("tb-min").addEventListener("click", () => invoke("minimize_window"));
@@ -336,8 +315,8 @@ async function init() {
   $("tb-tray").addEventListener("click", () => invoke("hide_window"));
   $("tb-close").addEventListener("click", async () => {
     const cfg = await invoke("get_config");
-    if (cfg.rememberCloseAction && cfg.close_action && cfg.close_action !== "ask") {
-      if (cfg.close_action === "exit") {
+    if (cfg.rememberCloseAction && cfg.closeAction && cfg.closeAction !== "ask") {
+      if (cfg.closeAction === "exit") {
         invoke("exit_app");
       } else {
         invoke("hide_window");
@@ -401,8 +380,7 @@ function hideExitConfirm() {
   $("exit-confirm-overlay").classList.remove("active");
 }
 
-/* ===== Auto-updater ===== */
-let _updateInFlight = false;
+/* ===== Update Notifier ===== */
 async function checkForUpdate() {
   try {
     const latest = await invoke("check_update");
@@ -412,41 +390,16 @@ async function checkForUpdate() {
       versionSpan.textContent = latest;
       banner.classList.remove("hidden");
 
-      // Reset state in case of previous partial attempt
-      _updateInFlight = false;
-      $("update-now-btn").disabled = false;
-      $("update-later-btn").disabled = false;
-      $("update-progress-info").classList.add("hidden");
-      $("update-actions").classList.remove("hidden");
-
-      $("update-now-btn").onclick = async () => {
-        if (_updateInFlight) return;
-        _updateInFlight = true;
-
-        // Swap actions for progress
-        $("update-now-btn").disabled = true;
-        $("update-later-btn").disabled = true;
-        $("update-actions").classList.add("hidden");
-        $("update-progress-info").classList.remove("hidden");
-
-        try {
-          await invoke("install_update");
-          // install_update restarts the process on success,
-          // so we should never reach here.
-        } catch (e) {
-          const msg = typeof e === "string" ? e : (e?.message || String(e));
-          console.error("install_update failed:", msg);
-          setStatusRaw(`更新失败: ${msg}`, "error");
-          // Restore banner so user can retry
-          $("update-actions").classList.remove("hidden");
-          $("update-progress-info").classList.add("hidden");
-          $("update-now-btn").disabled = false;
-          $("update-later-btn").disabled = false;
-          _updateInFlight = false;
+      $("update-now-btn").onclick = () => {
+        const url = "https://github.com/Arcohyp/NekoDown/releases/latest";
+        const opener = window.__TAURI__?.opener;
+        if (opener?.openUrl) {
+          opener.openUrl(url);
+        } else {
+          window.open(url, "_blank");
         }
       };
       $("update-later-btn").onclick = () => {
-        if (_updateInFlight) return;
         $("update-banner").classList.add("hidden");
       };
     }
@@ -736,7 +689,7 @@ async function onCancel() {
   });
 
   const ids = Array.from(state.activeDownloads.keys());
-  await Promise.all(ids.map((id) => invoke("cancel_download", { id }).catch(() => {})));
+  await Promise.all(ids.map((id) => invoke("cancel_download", { id }).catch((e) => console.warn("cancel_download failed:", e))));
   $("cancel-btn").disabled = false;
 }
 
@@ -926,7 +879,7 @@ async function tryAutoPaste() {
     input.classList.add("flash");
     setTimeout(() => input.classList.remove("flash"), 1500);
     setStatus("auto_paste_ok", "success");
-  } catch (e) { /* ignore */ }
+  } catch (e) { console.warn("Auto-paste failed:", e); }
 }
 
 /* ===== Clear completed progress ===== */
@@ -972,6 +925,7 @@ async function openSettings() {
   $("cfg-checkDiskSpace").checked = cfg.checkDiskSpace ?? true;
   $("cfg-minFreeSpace").value  = cfg.minFreeSpaceGB ?? 2;
   $("cfg-proxy").value         = cfg.proxy || "";
+  $("cfg-closeAction").value   = cfg.closeAction || "ask";
   $("cfg-sound").checked       = cfg.soundEnabled ?? true;
   $("settings-msg").textContent = "";
   $("settings-overlay").classList.add("active");
@@ -989,6 +943,8 @@ async function applySettings() {
     checkDiskSpace: $("cfg-checkDiskSpace").checked,
     minFreeSpaceGB: Number($("cfg-minFreeSpace").value) || 2,
     proxy: $("cfg-proxy").value.trim(),
+    closeAction: $("cfg-closeAction").value || "ask",
+    rememberCloseAction: $("cfg-closeAction").value !== "ask",
     soundEnabled: $("cfg-sound").checked,
     logEnabled: true,
   };

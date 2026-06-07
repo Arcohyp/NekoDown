@@ -378,11 +378,13 @@ function Sanitize-FileName {
     param([string]$name)
     $invalid = [System.IO.Path]::GetInvalidFileNameChars()
     foreach ($c in $invalid) { $name = $name.Replace([string]$c, "_") }
-    # Prevent path traversal via relative path separators or dot sequences
-    $name = $name -replace '[\\/]', '_'
+    # Prevent path traversal via relative path separators or dot sequences.
+    # Also block Unicode full-width slashes that could bypass naive filters.
+    $name = $name -replace '[\\/／＼]', '_'
     $name = $name -replace '\.{2,}', '_'
     $name = $name.TrimEnd(" .")
-    $reserved = @("CON","PRN","AUX","NUL") + (1..9 | ForEach-Object { "COM$_"; "LPT$_" })
+    # Windows reserved names (including COM0/LPT0 and CLOCK$).
+    $reserved = @("CON","PRN","AUX","NUL","CLOCK$") + (0..9 | ForEach-Object { "COM$_"; "LPT$_" })
     $baseName = [System.IO.Path]::GetFileNameWithoutExtension($name)
     if ($reserved -contains $baseName.ToUpper()) {
         $ext = [System.IO.Path]::GetExtension($name)

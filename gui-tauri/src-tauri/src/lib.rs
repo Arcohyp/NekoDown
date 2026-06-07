@@ -299,8 +299,47 @@ fn default_sound_enabled() -> bool { true }
 fn default_close_action() -> String { "ask".to_string() }
 fn default_remember_close_action() -> bool { false }
 
+// ==================== Input Validation ====================
+
+/// Reject arguments that contain control characters or shell metacharacters
+/// that could be misinterpreted by PowerShell's parser.
+fn validate_safe_arg(arg: &str) -> Result<(), String> {
+    if arg.is_empty() {
+        return Err("参数不能为空".to_string());
+    }
+    for c in arg.chars() {
+        match c {
+            '\0' | '\n' | '\r' | '\t' => {
+                return Err(format!("参数包含非法控制字符: U+{:04X}", c as u32));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Validate that a path does not contain path-traversal sequences.
+fn validate_path_safe(path: &str) -> Result<(), String> {
+    validate_safe_arg(path)?;
+    // Reject Windows-style traversal (..\) and Unix-style (../)
+    if path.contains("..") {
+        return Err("路径不能包含父目录引用 (..)".to_string());
+    }
+    Ok(())
+}
+
+/// Validate that a string looks like a reasonable URL.
+fn validate_url_safe(url: &str) -> Result<(), String> {
+    validate_safe_arg(url)?;
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err("URL 必须以 http:// 或 https:// 开头".to_string());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn parse_share(link: String) -> Result<Value, String> {
+    validate_url_safe(&link)?;
     let bridge = bridge_path()?;
     let mut cmd = Command::new("powershell");
     cmd.args([
@@ -344,6 +383,11 @@ async fn start_download(
     let path = file.get("path").and_then(|v| v.as_str()).ok_or("missing file.path")?.to_string();
     let size = file.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
     let rel = file.get("relativePath").and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+    validate_path_safe(&path)?;
+    validate_path_safe(&rel)?;
+    validate_url_safe(&domain)?;
+    validate_path_safe(&output_dir)?;
 
     let conn = connections.unwrap_or(0).to_string();
 
@@ -474,6 +518,16 @@ fn paths_exist(paths: Vec<String>) -> Vec<bool> {
 }
 
 #[tauri::command]
+/// Read a text file and strip UTF-8 BOM if present.
+fn read_utf8_file(path: &std::path::Path) -> Result<String, String> {
+    let mut raw = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    if raw.starts_with('\u{feff}') {
+        raw = raw[3..].to_string();
+    }
+    Ok(raw)
+}
+
+#[tauri::command]
 fn get_config() -> Result<Value, String> {
     let root = find_project_root().map_err(|e| e.to_string())?;
     let cfg_path = root.join("config.json");
@@ -483,11 +537,7 @@ fn get_config() -> Result<Value, String> {
         let cfg = AppConfig::with_root(&root);
         return serde_json::to_value(&cfg).map_err(|e| e.to_string());
     }
-    let mut raw = std::fs::read_to_string(&cfg_path).map_err(|e| e.to_string())?;
-    // Strip UTF-8 BOM if present so serde_json doesn't choke.
-    if raw.starts_with('\u{feff}') {
-        raw = raw[3..].to_string();
-    }
+    let raw = read_utf8_file(&cfg_path)?;
     eprintln!("[get_config] read {} bytes", raw.len());
     if raw.trim().is_empty() {
         eprintln!("[get_config] file empty, returning default config");
@@ -569,100 +619,10 @@ async fn check_update(app: AppHandle) -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-async fn install_update(app: AppHandle) -> Result<(), String> {
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    let update = match updater.check().await {
-        Ok(Some(u)) => u,
-        Ok(None) => return Err("no_update_available".to_string()),
-        Err(e) => return Err(e.to_string()),
-    };
-
-    let download_url = update.download_url.clone();
-    let version = update.version.clone();
-
-    // Manually download the installer, bypassing the plugin's broken
-    // verify_signature (which crashes when pubkey is "").
-    let _ = app.emit("update-state", serde_json::json!({ "state": "downloading" }));
-
-    let client = reqwest::Client::builder()
-        .user_agent(&format!("NekoDown-Updater/{}", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
-
-    let response = client
-        .get(download_url.as_str())
-        .send()
-        .await
-        .map_err(|e| format!("Download request failed: {e}"))?;
-
-    if !response.status().is_success() {
-        return Err(format!(
-            "Download failed with HTTP {}",
-            response.status()
-        ));
-    }
-
-    let total_size: Option<u64> = response
-        .headers()
-        .get(reqwest::header::CONTENT_LENGTH)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.parse().ok());
-
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Download error: {e}"))?;
-    let _ = app.emit(
-        "update-state",
-        serde_json::json!({
-            "state": "downloading",
-            "downloaded": bytes.len(),
-            "total": total_size
-        }),
-    );
-
-    let _ = app.emit("update-state", serde_json::json!({ "state": "installing" }));
-
-    // Write downloaded bytes to temp file
-    let temp_dir = std::env::temp_dir().join(format!("nekodown-update-{}", version));
-    let installer_path =
-        temp_dir.join(format!("NekoDown_{}_x64-setup.exe", version));
-    std::fs::create_dir_all(&temp_dir)
-        .map_err(|e| format!("Failed to create temp dir: {e}"))?;
-    std::fs::write(&installer_path, &bytes)
-        .map_err(|e| format!("Failed to write installer: {e}"))?;
-
-    // Run the NSIS installer
-    // The v3.4.0+ NSIS installer supports /UPDATE (built with createUpdaterArtifacts).
-    // /S ensures silent (non-interactive) installation.
-    let status = std::process::Command::new(&installer_path)
-        .args(["/S", "/UPDATE"])
-        .status()
-        .map_err(|e| format!("Failed to launch installer: {e}"))?;
-
-    if !status.success() {
-        return Err(format!("Installer exited with: {:?}", status.code()));
-    }
-
-    // Clean up downloaded installer before spawning new instance.
-    let _ = std::fs::remove_dir_all(&temp_dir);
-
-    // Spawn a fresh instance (so the user lands on the updated app)
-    if let Ok(exe) = std::env::current_exe() {
-        let _ = std::process::Command::new(exe).spawn();
-    }
-    std::process::exit(0);
-}
-
-#[tauri::command]
 fn get_lang_strings(lang: String) -> Result<Value, String> {
     let root = find_project_root().map_err(|e| e.to_string())?;
     let lang_path = root.join("lang.json");
-    let mut raw = std::fs::read_to_string(&lang_path).map_err(|e| e.to_string())?;
-    // Strip UTF-8 BOM if present.
-    if raw.starts_with('\u{feff}') {
-        raw = raw[3..].to_string();
-    }
+    let raw = read_utf8_file(&lang_path)?;
     eprintln!("[get_lang_strings] read {} bytes", raw.len());
     if raw.trim().is_empty() {
         eprintln!("[get_lang_strings] file empty");
@@ -712,7 +672,6 @@ pub fn run() {
             get_lang_strings,
             get_version,
             check_update,
-            install_update,
             paths_exist,
             minimize_window,
             maximize_window,
