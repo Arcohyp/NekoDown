@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 
 <#
 .SYNOPSIS
@@ -33,7 +33,7 @@ param(
     [int]$Aria2Connections = 0
 )
 
-$script:Version = "3.4.1"
+$script:Version = "3.4.2"
 $script:BaseDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 if (-not $script:BaseDir) { $script:BaseDir = (Get-Location).Path }
 $script:ConfigPath = Join-Path $script:BaseDir "config.json"
@@ -265,3 +265,4 @@ try {
     Write-Host (L "press_any_key") -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
+
