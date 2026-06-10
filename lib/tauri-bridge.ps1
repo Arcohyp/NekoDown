@@ -70,10 +70,14 @@ if ($Action -eq "parse") {
     if (-not $files -or $files.Count -eq 0) { Emit-Json @{ ok=$false; error="no_files_found" }; exit 1 }
     $entries = @()
     foreach ($f in $files) {
+        $filePath = [string]$f.path
+        if (-not $filePath) {
+            $filePath = "cloudreve://$($parsed.ShareId)@share/$($f.name)"
+        }
         $entries += @{
             name = [string]$f.name
             size = [long]$f.size
-            path = [string]$f.path
+            path = $filePath
             relativePath = [string]$f._relativePath
         }
     }

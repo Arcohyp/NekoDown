@@ -16,6 +16,8 @@ const state = {
   activeDownloads: new Map(), // downloadId -> { file, li }
   cancelled: false,
   cancelling: new Set(), // file paths pending cancellation
+  lastProgressTime: new Map(), // filePath -> timestamp
+  stalledCheckInterval: null,
 };
 
 let i18nStrings = null; // null = not loaded yet
@@ -374,6 +376,15 @@ async function init() {
 }
 
 function showExitConfirm() {
+  const hint = $("exit-hint");
+  if (hint) {
+    if (state.downloading && state.activeDownloads.size > 0) {
+      hint.classList.remove("hidden");
+      hint.textContent = t("exit_will_cancel_downloads");
+    } else {
+      hint.classList.add("hidden");
+    }
+  }
   $("exit-confirm-overlay").classList.add("active");
 }
 function hideExitConfirm() {
@@ -690,6 +701,7 @@ async function onCancel() {
 
   const ids = Array.from(state.activeDownloads.keys());
   await Promise.all(ids.map((id) => invoke("cancel_download", { id }).catch((e) => console.warn("cancel_download failed:", e))));
+  stopStallDetection();
   $("cancel-btn").disabled = false;
 }
 
@@ -722,10 +734,12 @@ async function onDownload() {
 
   state.downloading = true;
   state.cancelled = false;
-  $("download-btn").classList.add("hidden");
+  // Keep download button visible so users can append more files while downloading.
+  $("download-btn").disabled = false;
   $("cancel-btn").classList.remove("hidden");
   $("cancel-btn").disabled = false;
-  $("parse-btn").disabled = true;
+  // Allow parsing while downloading — new files can be added to the queue.
+  $("parse-btn").disabled = false;
   setStatus("downloading_count", null, selected.length);
 
   // Centralized download-finished listener for this batch.
@@ -745,12 +759,14 @@ async function onDownload() {
   await setupBatchListener();
 
   const progressList = $("progress-list");
-  progressList.innerHTML = "";
-  state.progressByPath.clear();
-  state.sparkData.clear();
-  state.activeDownloads.clear();
-  state.cancelling.clear();
-  selected.forEach((f) => {
+  // Append new tasks instead of clearing — supports adding files while downloading.
+  // Skip files that are already in the progress list (by path).
+  const newSelected = selected.filter((f) => !state.progressByPath.has(f.path));
+  if (newSelected.length === 0) {
+    setStatus("already_in_queue", null, selected.length);
+    return;
+  }
+  newSelected.forEach((f) => {
     const id = f.path;
     const li = document.createElement("li");
     li.className = "progress-row";
@@ -771,8 +787,12 @@ async function onDownload() {
     progressList.appendChild(li);
     state.progressByPath.set(id, li);
     state.sparkData.set(id, []);
+    state.lastProgressTime.set(id, Date.now());
   });
   $("progress-empty").classList.add("hidden");
+
+  // Start stall detection timer.
+  startStallDetection();
 
   const results = await Promise.allSettled(selected.map((f) => startSingleDownload(f)));
   let success = 0, failed = 0;
@@ -787,11 +807,12 @@ async function onDownload() {
   // Clean up the batch-level listener so it never leaks into future downloads.
   if (batchUnlisten) batchUnlisten();
 
+  stopStallDetection();
   state.downloading = false;
   state.cancelled = false;
   state.cancelling.clear();
-  $("download-btn").classList.remove("hidden");
   $("cancel-btn").classList.add("hidden");
+  $("download-btn").disabled = getSelectedFiles().length === 0;
   $("parse-btn").disabled = false;
   setStatus("completed", failed ? "error" : "success", success, failed);
 }
@@ -812,6 +833,16 @@ function onDownloadEvent(payload) {
     const meta = `${fmtSize(cur)} / ${fmtSize(total)} • ${fmtSpeed(speed)}`;
     row.querySelector(".progress-meta").textContent = meta;
 
+    // Reset stall timer for this file.
+    state.lastProgressTime.set(payload.filePath, Date.now());
+    // Clear any previous stalled warning if it exists.
+    const ps = row.querySelector(".progress-status");
+    if (ps && ps.dataset.i18n === "stalled_status") {
+      ps.textContent = t("downloading");
+      ps.dataset.i18n = "downloading";
+      ps.className = "progress-status running";
+    }
+
     const id = row.dataset.id;
     const arr = state.sparkData.get(id);
     if (arr) {
@@ -820,6 +851,38 @@ function onDownloadEvent(payload) {
       const canvas = row.querySelector(".spark");
       if (canvas) drawSparkline(canvas, arr);
     }
+  }
+}
+
+// Stall detection: mark files as "stalled" if no progress event for 30s.
+function startStallDetection() {
+  if (state.stalledCheckInterval) return;
+  state.stalledCheckInterval = setInterval(() => {
+    const now = Date.now();
+    state.lastProgressTime.forEach((ts, path) => {
+      const row = state.progressByPath.get(path);
+      if (!row) return;
+      const ps = row.querySelector(".progress-status");
+      if (!ps) return;
+      // Skip already terminal states.
+      if (ps.classList.contains("done") || ps.classList.contains("failed")) return;
+      // Skip cancelled.
+      if (state.cancelling.has(path) || state.cancelled) return;
+      const elapsed = now - ts;
+      if (elapsed > 30000 && ps.dataset.i18n !== "stalled_status") {
+        ps.textContent = t("stalled_status");
+        ps.dataset.i18n = "stalled_status";
+        ps.className = "progress-status running";
+        ps.style.color = "var(--warn)";
+      }
+    });
+  }, 5000);
+}
+
+function stopStallDetection() {
+  if (state.stalledCheckInterval) {
+    clearInterval(state.stalledCheckInterval);
+    state.stalledCheckInterval = null;
   }
 }
 

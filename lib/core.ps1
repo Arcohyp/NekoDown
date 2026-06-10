@@ -297,6 +297,11 @@ function Expand-FileList {
                     if ($basePath) {
                         $f | Add-Member -NotePropertyName '_relativePath' -NotePropertyValue $basePath -Force
                     }
+                    # Ensure path is set for files that don't have it from the API
+                    if (-not $f.path) {
+                        $filePath = if ($basePath) { "$basePath/$($f.name)" } else { $f.name }
+                        $f | Add-Member -NotePropertyName 'path' -NotePropertyValue "cloudreve://$shareId@share/$filePath" -Force
+                    }
                     $results += $f
                 }
             }
@@ -446,7 +451,11 @@ function Start-FileDownload {
         "--header=Accept-Encoding: gzip, deflate, br",
         "--header=DNT: 1",
         "--check-certificate=true",
-        "--async-dns=false"
+        "--async-dns=false",
+        "--timeout=60",
+        "--connect-timeout=30",
+        "--max-tries=3",
+        "--retry-wait=5"
     )
     if ($resume) { $ariaArgs += "--continue=true" }
     $ariaArgs += "$url"

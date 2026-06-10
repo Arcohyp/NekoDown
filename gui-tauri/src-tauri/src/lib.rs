@@ -645,12 +645,65 @@ fn get_lang_strings(lang: String) -> Result<Value, String> {
     }))
 }
 
+/// On Windows, place the current process into a Job Object with
+/// JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE so that when the GUI exits
+/// (including being killed by taskkill) all aria2c child processes
+/// are terminated automatically.
+#[cfg(target_os = "windows")]
+fn setup_job_object() {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+    use windows::Win32::System::Threading::GetCurrentProcess;
+
+    unsafe {
+        let Ok(job) = CreateJobObjectW(None, None) else {
+            eprintln!("[warn] CreateJobObjectW failed");
+            return;
+        };
+
+        let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+        if SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const _,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        )
+        .is_ok()
+        {
+            let process = GetCurrentProcess();
+            if AssignProcessToJobObject(job, process).is_err() {
+                eprintln!("[warn] AssignProcessToJobObject failed");
+            }
+        } else {
+            eprintln!("[warn] SetInformationJobObject failed");
+        }
+
+        // Intentionally leak the job handle so it stays alive for the process lifetime.
+        // When the last handle is closed (process exits), all processes in the job are killed.
+        let _ = CloseHandle(job);
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn setup_job_object() {}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Ensure embedded scripts are available on disk (single-exe mode).
     if let Err(e) = ensure_resources_extracted() {
         eprintln!("[warn] 无法释放内置资源到 APPDATA: {}", e);
     }
+
+    // setup_job_object() temporarily disabled:
+    // Win32 Job Object causes release build to exit immediately (conflict with
+    // lto + opt-level="s" + WebView2 init). The existing WindowEvent::Destroyed
+    // handler already cancels active downloads on normal close.
 
     let manager = DownloadManager::new();
     if MANAGER.set(manager.clone()).is_err() {
