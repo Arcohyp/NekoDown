@@ -385,7 +385,9 @@ async fn start_download(
     let rel = file.get("relativePath").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
     validate_path_safe(&path)?;
-    validate_path_safe(&rel)?;
+    if !rel.is_empty() {
+        validate_path_safe(&rel)?;
+    }
     validate_url_safe(&domain)?;
     validate_path_safe(&output_dir)?;
 
