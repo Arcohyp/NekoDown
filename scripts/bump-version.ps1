@@ -9,12 +9,20 @@
     Semantic version string, e.g. "3.4.0" or "3.3.5".
 .PARAMETER DryRun
     Show what would change without modifying files.
+.PARAMETER Dev
+    Development mode — update version files and commit, but do NOT tag or push.
+    Useful when you want to bump the version for in-repo testing before release.
 .PARAMETER NoPush
     Stage, commit, tag, but do NOT push to remote.
 .EXAMPLE
     .\scripts\bump-version.ps1 3.4.0
+    # Full release: bump → commit → tag → push (triggers workflow)
+.EXAMPLE
+    .\scripts\bump-version.ps1 3.4.0 -Dev
+    # Dev mode: bump → commit only (no tag, no workflow trigger)
 .EXAMPLE
     .\scripts\bump-version.ps1 3.4.0 -DryRun
+    # Preview what would change
 #>
 
 [CmdletBinding()]
@@ -23,6 +31,7 @@ param(
     [string]$NewVersion,
 
     [switch]$DryRun,
+    [switch]$Dev,
     [switch]$NoPush
 )
 
@@ -111,6 +120,12 @@ if (-not $DryRun) {
     Write-Host "`n==> Staging changes..." -ForegroundColor Cyan
     git add -A
     git commit -m "chore: bump version to ${NewVersion}"
+
+    if ($Dev) {
+        Write-Host "`n✅ Version ${NewVersion} bumped (dev mode — no tag, no push, no workflow)" -ForegroundColor Green
+        Write-Host "   When ready to release, run:  git tag -a v${NewVersion} -m \"v${NewVersion}\"; git push origin v${NewVersion}" -ForegroundColor Cyan
+        exit 0
+    }
 
     Write-Host "`n==> Tagging v${NewVersion}..." -ForegroundColor Cyan
     git tag -a "v${NewVersion}" -m "v${NewVersion}"
