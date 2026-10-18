@@ -57,6 +57,11 @@ html, body {
   overflow: hidden;
 }
 
+/* Smooth theme switching */
+body, .titlebar, .panel, .footer, .share-info, .modal-card, .exit-card, .update-banner {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
 .app {
   position: relative;
   height: calc(100vh - 36px);
@@ -275,6 +280,20 @@ html, body {
 .btn:hover { background: var(--bg-soft); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Keyboard focus indicators */
+.btn:focus-visible,
+.titlebar-btn:focus-visible,
+.btn-cancel-file:focus-visible,
+.btn-retry-file:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.modal-body input:focus-visible,
+.modal-body select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  border-color: var(--accent);
+}
 .btn-primary {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
   border-color: transparent;
@@ -449,12 +468,10 @@ body[data-theme="sakura"] .btn-danger:hover {
   background: var(--bg-soft);
   margin-bottom: 6px;
 }
-.progress-row .row-top {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 6px;
-  align-items: center;
-}
+.progress-row.is-done { cursor: pointer; }
+.progress-row.is-done:hover { outline: 1px solid var(--border); }
+.progress-row.is-skipped { opacity: 0.65; }
+.progress-row.is-skipped .progress-bar-fill { background: var(--border); }
 .progress-name {
   font-size: 13px;
   white-space: nowrap;
@@ -473,20 +490,16 @@ body[data-theme="sakura"] .btn-danger:hover {
   background: var(--bg-elev);
 }
 .progress-status.running { color: var(--accent-soft); }
-.progress-status.done { color: var(--success); background: rgba(163, 230, 53, 0.1); }
-.progress-status.failed { color: var(--danger); background: rgba(248, 113, 113, 0.1); }
-.progress-bar {
-  height: 4px;
-  background: var(--bg-elev);
-  border-radius: 2px;
-  overflow: hidden;
+.progress-status.done {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
 }
-.progress-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-soft) 100%);
-  width: 0;
-  transition: width 0.25s ease-out;
+.progress-status.failed {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
+.progress-status.stalled { color: var(--warn); }
+.progress-status.skipped { color: var(--text-muted); }
 
 .footer {
   display: grid;
@@ -607,9 +620,10 @@ body[data-theme="sakura"] .btn-danger:hover {
   height: 18px;
   border-radius: 3px;
 }
+/* name | meta | status | spark | retry | cancel */
 .progress-row .row-top {
   display: grid;
-  grid-template-columns: 1fr auto auto auto auto;
+  grid-template-columns: 1fr auto auto auto auto auto;
   gap: 8px;
   margin-bottom: 6px;
   align-items: center;
@@ -617,7 +631,8 @@ body[data-theme="sakura"] .btn-danger:hover {
 .progress-row canvas.spark {
   margin-left: 6px;
 }
-.btn-cancel-file {
+.btn-cancel-file,
+.btn-retry-file {
   background: none;
   border: none;
   color: var(--text-muted);
@@ -632,11 +647,27 @@ body[data-theme="sakura"] .btn-danger:hover {
 .btn-cancel-file:hover {
   opacity: 1;
   color: var(--danger);
-  background: rgba(248, 113, 113, 0.1);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
-.btn-cancel-file:disabled {
+.btn-retry-file:hover {
+  opacity: 1;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.btn-cancel-file:disabled,
+.btn-retry-file:disabled {
   opacity: 0.2;
   cursor: not-allowed;
+}
+
+/* ===== Overall stats (progress panel header) ===== */
+.overall-stats {
+  margin-left: auto;
+  margin-right: 8px;
+  font-size: 11px;
+  color: var(--accent-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* ===== Progress Bar ===== */
